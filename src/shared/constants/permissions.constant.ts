@@ -30,6 +30,11 @@ export const PERMISSIONS = {
   EXPENSE_CREATE: 'EXPENSE_CREATE',
   EXPENSE_EDIT: 'EXPENSE_EDIT',
   EXPENSE_DELETE: 'EXPENSE_DELETE',
+
+  ACCOUNT_VIEW: 'ACCOUNT_VIEW',
+  ACCOUNT_CREATE: 'ACCOUNT_CREATE',
+  ACCOUNT_EDIT: 'ACCOUNT_EDIT',
+  ACCOUNT_DELETE: 'ACCOUNT_DELETE',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -52,6 +57,11 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionKey, string> = {
   EXPENSE_CREATE: 'Create expenses',
   EXPENSE_EDIT: 'Modify expenses',
   EXPENSE_DELETE: 'Delete expenses',
+
+  ACCOUNT_VIEW: 'List and check accounts',
+  ACCOUNT_CREATE: 'Create accounts',
+  ACCOUNT_EDIT: 'Modify accounts',
+  ACCOUNT_DELETE: 'Delete accounts',
 };
 
 /**

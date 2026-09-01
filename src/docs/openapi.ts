@@ -26,6 +26,12 @@ import {
   updateExpenseSchema,
   expenseIdParamSchema,
 } from '@/modules/expense/expense.schema';
+import {
+  createAccountSchema,
+  listAccountsQuerySchema,
+  updateAccountSchema,
+  accountIdParamSchema,
+} from '@/modules/account/account.schema';
 
 /**
  * ===========================================================================
@@ -93,6 +99,16 @@ const expenseResponseSchema = z.object({
   amount: z.number(),
   date: z.string(),
   categoryId: z.uuid(),
+  userId: z.uuid(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const accountResponseSchema = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  initalBalance: z.number(),
+  balance: z.number(),
   userId: z.uuid(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -207,6 +223,7 @@ export function buildOpenApiDocument(): ReturnType<typeof createDocument> {
       { name: 'Users', description: 'User administration (permission gated)' },
       { name: 'Categories', description: 'Categories (permission gated)' },
       { name: 'Expenses', description: 'Expenses (permission gated)' },
+      { name: 'Accounts', description: 'Accounts (permission gated)' },
     ],
     components: {
       securitySchemes: {
@@ -405,35 +422,35 @@ export function buildOpenApiDocument(): ReturnType<typeof createDocument> {
 
       // --------------------------------------------------------------- Categories
       '/categories': {
-     get: {
-       tags: ['Categories'],
-       summary: 'List categories',
-       description: 'Requires CATEGORY_VIEW.',
-       security: bearerAuth,
-       requestParams: { query: listCategoriesQuerySchema },
-       responses: {
-         '200': {
-           description: 'Paginated categories',
-           content: { 'application/json': { schema: paginatedOf(categoryResponseSchema) } },
-         },
-         ...commonErrors,
-       },
-     },
-     post: {
-       tags: ['Categories'],
-       summary: 'Create a category',
-       description: 'Requires CATEGORY_CREATE.',
-       security: bearerAuth,
-       requestBody: { content: { 'application/json': { schema: createCategorySchema } } },
-       responses: {
-         '201': {
-           description: 'Category created',
-           content: { 'application/json': { schema: successOf(categoryResponseSchema) } },
-         },
-         ...conflictResponse,
-         ...commonErrors,
-       },
-     },
+        get: {
+          tags: ['Categories'],
+          summary: 'List categories',
+          description: 'Requires CATEGORY_VIEW.',
+          security: bearerAuth,
+          requestParams: { query: listCategoriesQuerySchema },
+          responses: {
+            '200': {
+              description: 'Paginated categories',
+              content: { 'application/json': { schema: paginatedOf(categoryResponseSchema) } },
+            },
+            ...commonErrors,
+          },
+        },
+        post: {
+          tags: ['Categories'],
+          summary: 'Create a category',
+          description: 'Requires CATEGORY_CREATE.',
+          security: bearerAuth,
+          requestBody: { content: { 'application/json': { schema: createCategorySchema } } },
+          responses: {
+            '201': {
+              description: 'Category created',
+              content: { 'application/json': { schema: successOf(categoryResponseSchema) } },
+            },
+            ...conflictResponse,
+            ...commonErrors,
+          },
+        },
       },
 
       '/categories/{id}': {
@@ -484,35 +501,35 @@ export function buildOpenApiDocument(): ReturnType<typeof createDocument> {
 
       // --------------------------------------------------------------- Expenses
       '/expenses': {
-     get: {
-       tags: ['Expenses'],
-       summary: 'List expenses',
-       description: 'Requires EXPENSE_VIEW.',
-       security: bearerAuth,
-       requestParams: { query: listExpensesQuerySchema },
-       responses: {
-         '200': {
-           description: 'Paginated expenses',
-           content: { 'application/json': { schema: paginatedOf(expenseResponseSchema) } },
-         },
-         ...commonErrors,
-       },
-     },
-     post: {
-       tags: ['Expenses'],
-       summary: 'Create an expense',
-       description: 'Requires EXPENSE_CREATE.',
-       security: bearerAuth,
-       requestBody: { content: { 'application/json': { schema: createExpenseSchema } } },
-       responses: {
-         '201': {
-           description: 'Expense created',
-           content: { 'application/json': { schema: successOf(expenseResponseSchema) } },
-         },
-         ...conflictResponse,
-         ...commonErrors,
-       },
-     },
+        get: {
+          tags: ['Expenses'],
+          summary: 'List expenses',
+          description: 'Requires EXPENSE_VIEW.',
+          security: bearerAuth,
+          requestParams: { query: listExpensesQuerySchema },
+          responses: {
+            '200': {
+              description: 'Paginated expenses',
+              content: { 'application/json': { schema: paginatedOf(expenseResponseSchema) } },
+            },
+            ...commonErrors,
+          },
+        },
+        post: {
+          tags: ['Expenses'],
+          summary: 'Create an expense',
+          description: 'Requires EXPENSE_CREATE.',
+          security: bearerAuth,
+          requestBody: { content: { 'application/json': { schema: createExpenseSchema } } },
+          responses: {
+            '201': {
+              description: 'Expense created',
+              content: { 'application/json': { schema: successOf(expenseResponseSchema) } },
+            },
+            ...conflictResponse,
+            ...commonErrors,
+          },
+        },
       },
 
       '/expenses/{id}': {
@@ -553,6 +570,85 @@ export function buildOpenApiDocument(): ReturnType<typeof createDocument> {
           description: 'Requires EXPENSE_DELETE.',
           security: bearerAuth,
           requestParams: { path: expenseIdParamSchema },
+          responses: {
+            '204': { description: 'Deleted' },
+            ...notFoundResponse,
+            ...commonErrors,
+          },
+        },
+      },
+
+      // --------------------------------------------------------------- Accounts
+      '/accounts': {
+        get: {
+          tags: ['Accounts'],
+          summary: 'List accounts',
+          description: 'Requires ACCOUNT_VIEW.',
+          security: bearerAuth,
+          requestParams: { query: listAccountsQuerySchema },
+          responses: {
+            '200': {
+              description: 'Paginated accounts',
+              content: { 'application/json': { schema: paginatedOf(accountResponseSchema) } },
+            },
+            ...commonErrors,
+          },
+        },
+        post: {
+          tags: ['Accounts'],
+          summary: 'Create an account',
+          description: 'Requires ACCOUNT_CREATE.',
+          security: bearerAuth,
+          requestBody: { content: { 'application/json': { schema: createAccountSchema } } },
+          responses: {
+            '201': {
+              description: 'Account created',
+              content: { 'application/json': { schema: successOf(accountResponseSchema) } },
+            },
+            ...conflictResponse,
+            ...commonErrors,
+          },
+        },
+      },
+
+      '/accounts/{id}': {
+        get: {
+          tags: ['Accounts'],
+          summary: 'Get an account',
+          description: 'Requires ACCOUNT_VIEW.',
+          security: bearerAuth,
+          requestParams: { path: accountIdParamSchema },
+          responses: {
+            '200': {
+              description: 'The account',
+              content: { 'application/json': { schema: successOf(accountResponseSchema) } },
+            },
+            ...notFoundResponse,
+            ...commonErrors,
+          },
+        },
+        patch: {
+          tags: ['Accounts'],
+          summary: 'Update an account',
+          description: 'Requires ACCOUNT_EDIT.',
+          security: bearerAuth,
+          requestParams: { path: accountIdParamSchema },
+          requestBody: { content: { 'application/json': { schema: updateAccountSchema } } },
+          responses: {
+            '200': {
+              description: 'Updated account',
+              content: { 'application/json': { schema: successOf(accountResponseSchema) } },
+            },
+            ...notFoundResponse,
+            ...commonErrors,
+          },
+        },
+        delete: {
+          tags: ['Accounts'],
+          summary: 'Delete an account',
+          description: 'Requires ACCOUNT_DELETE.',
+          security: bearerAuth,
+          requestParams: { path: accountIdParamSchema },
           responses: {
             '204': { description: 'Deleted' },
             ...notFoundResponse,

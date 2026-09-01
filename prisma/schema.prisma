@@ -47,6 +47,7 @@ model User {
   updatedAt  DateTime   @updatedAt
   categories Category[]
   expenses   Expense[]
+  accounts   Account[]
 
   // email is already indexed by @unique — that index serves the login lookup.
   @@index([roleId]) // permission resolution joins Role on every authorize call
@@ -182,4 +183,18 @@ model Expense {
   @@index([userId, date]) // list expenses for a user
   @@index([categoryId]) // list expenses for a category
   @@map("expenses")
+}
+
+model Account {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String   @db.VarChar(100)
+  initalBalance Decimal  @db.Decimal(10, 2)
+  balance       Decimal  @db.Decimal(10, 2)
+  userId        String   @db.Uuid
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId]) // list accounts for a user
+  @@map("accounts")
 }
