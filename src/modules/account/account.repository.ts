@@ -15,14 +15,13 @@ export const ACCOUNT_SORT_FIELDS = [
   'name',
   'initalBalance',
   'balance',
-  'userId',
   'createdAt',
   'updatedAt',
 ] as const;
 
 export type AccountSortField = (typeof ACCOUNT_SORT_FIELDS)[number];
 
-const ACCOUNT_SEARCH_FIELDS = ['name', 'userId'] as const;
+const ACCOUNT_SEARCH_FIELDS = ['name'] as const;
 
 export class AccountRepository {
   constructor(private readonly prisma: PrismaClientInstance) {}
@@ -34,7 +33,7 @@ export class AccountRepository {
   private buildWhere(filters: AccountListFilters) {
     return {
       ...omitUndefined({
-        // no equality filters — add one per field that needs it
+        userId: filters.userId,
       }),
       ...buildSearchFilter(ACCOUNT_SEARCH_FIELDS, filters.search),
     };
@@ -69,7 +68,9 @@ export class AccountRepository {
   }
 
   async count(filters: AccountListFilters = {}): Promise<number> {
-    return withPrismaErrors('Account', () => this.prisma.account.count({ where: this.buildWhere(filters) }));
+    return withPrismaErrors('Account', () =>
+      this.prisma.account.count({ where: this.buildWhere(filters) }),
+    );
   }
 
   async create(data: CreateAccountData, tx?: PrismaTransactionClient): Promise<AccountRecord> {
@@ -85,7 +86,11 @@ export class AccountRepository {
     );
   }
 
-  async update(id: string, data: UpdateAccountData, tx?: PrismaTransactionClient): Promise<AccountRecord> {
+  async update(
+    id: string,
+    data: UpdateAccountData,
+    tx?: PrismaTransactionClient,
+  ): Promise<AccountRecord> {
     return withPrismaErrors('Account', () =>
       this.client(tx).account.update({
         where: { id },
@@ -93,7 +98,6 @@ export class AccountRepository {
           name: data.name,
           initalBalance: data.initalBalance,
           balance: data.balance,
-          userId: data.userId,
         }),
       }),
     );

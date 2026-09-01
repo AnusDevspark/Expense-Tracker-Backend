@@ -18,9 +18,8 @@ export const listAccountsQuerySchema = paginationSchema
 
 export const createAccountSchema = z.object({
   name: z.string(),
-  initalBalance: z.number(),
+  initalBalance: z.number().default(0),
   balance: z.number(),
-  userId: z.string(),
 });
 
 export const updateAccountSchema = z
@@ -28,7 +27,6 @@ export const updateAccountSchema = z
     name: z.string().optional(),
     initalBalance: z.number().optional(),
     balance: z.number().optional(),
-    userId: z.string().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: 'at least one field must be provided',

@@ -42,10 +42,10 @@ export interface UpdateAccountData {
   name?: string;
   initalBalance?: number;
   balance?: number;
-  userId?: string;
 }
 
 /** Whitelisted filters. */
 export interface AccountListFilters {
   search?: string;
+  userId?: string;
 }

@@ -24,7 +24,7 @@ export const EXPENSE_SORT_FIELDS = [
 
 export type ExpenseSortField = (typeof EXPENSE_SORT_FIELDS)[number];
 
-const EXPENSE_SEARCH_FIELDS = ['title', 'description', 'categoryId', 'userId'] as const;
+const EXPENSE_SEARCH_FIELDS = ['title', 'description', 'categoryId'] as const;
 
 export class ExpenseRepository {
   constructor(private readonly prisma: PrismaClientInstance) {}
