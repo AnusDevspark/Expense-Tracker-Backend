@@ -6,10 +6,9 @@ import type { CreateCategoryInput } from '@/modules/category/category.schema';
 import type { AuthenticatedUser } from '@/shared/types/authenticated-user.type';
 
 /**
- * Business rules covered here: ownership. A caller may always act on their own
- * categories; acting on someone else's requires the matching permission
- * (CATEGORY_VIEW/EDIT/DELETE doubling as the "any category" grant), mirroring
- * UserService.updateUser. See AGENTS.md.
+ * Business rule covered here: ownership is absolute. A caller may only ever
+ * act on their own categories — there is no permission that bypasses this.
+ * See AGENTS.md and category.service.ts's doc comment.
  */
 
 function createMockRepository() {
@@ -19,12 +18,6 @@ function createMockRepository() {
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
-  };
-}
-
-function createMockRbacService(hasPermission = false) {
-  return {
-    hasPermission: vi.fn().mockResolvedValue(hasPermission),
   };
 }
 
@@ -61,13 +54,11 @@ const sampleInput: CreateCategoryInput = {
 
 describe('CategoryService', () => {
   let repository: ReturnType<typeof createMockRepository>;
-  let rbacService: ReturnType<typeof createMockRbacService>;
   let service: CategoryService;
 
   beforeEach(() => {
     repository = createMockRepository();
-    rbacService = createMockRbacService(false);
-    service = new CategoryService(repository as never, rbacService as never);
+    service = new CategoryService(repository as never);
   });
 
   describe('getCategoryById', () => {
@@ -82,18 +73,11 @@ describe('CategoryService', () => {
       expect(result.id).toBe('11111111-1111-4111-8111-111111111111');
     });
 
-    it('throws ForbiddenError for a non-owner without CATEGORY_VIEW', async () => {
+    it('throws ForbiddenError for a non-owner', async () => {
       repository.findById.mockResolvedValue(makeCategoryRecord());
       await expect(
         service.getCategoryById('11111111-1111-4111-8111-111111111111', stranger),
       ).rejects.toThrow(ForbiddenError);
-    });
-
-    it('allows a non-owner holding CATEGORY_VIEW', async () => {
-      rbacService.hasPermission.mockResolvedValue(true);
-      repository.findById.mockResolvedValue(makeCategoryRecord());
-      const result = await service.getCategoryById('11111111-1111-4111-8111-111111111111', stranger);
-      expect(result.id).toBe('11111111-1111-4111-8111-111111111111');
     });
   });
 
@@ -119,24 +103,12 @@ describe('CategoryService', () => {
       expect(repository.update).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111', sampleInput);
     });
 
-    it('throws ForbiddenError for a non-owner without CATEGORY_EDIT', async () => {
+    it('throws ForbiddenError for a non-owner', async () => {
       repository.findById.mockResolvedValue(makeCategoryRecord());
       await expect(
         service.updateCategory('11111111-1111-4111-8111-111111111111', sampleInput, stranger),
       ).rejects.toThrow(ForbiddenError);
       expect(repository.update).not.toHaveBeenCalled();
-    });
-
-    it('allows a non-owner holding CATEGORY_EDIT', async () => {
-      rbacService.hasPermission.mockResolvedValue(true);
-      repository.findById.mockResolvedValue(makeCategoryRecord());
-      repository.update.mockResolvedValue(makeCategoryRecord());
-      const result = await service.updateCategory(
-        '11111111-1111-4111-8111-111111111111',
-        sampleInput,
-        stranger,
-      );
-      expect(result.id).toBe('11111111-1111-4111-8111-111111111111');
     });
   });
 
@@ -153,7 +125,7 @@ describe('CategoryService', () => {
       expect(repository.delete).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111');
     });
 
-    it('throws ForbiddenError for a non-owner without CATEGORY_DELETE', async () => {
+    it('throws ForbiddenError for a non-owner', async () => {
       repository.findById.mockResolvedValue(makeCategoryRecord());
       await expect(
         service.deleteCategory('11111111-1111-4111-8111-111111111111', stranger),
@@ -163,23 +135,11 @@ describe('CategoryService', () => {
   });
 
   describe('listCategories', () => {
-    it('scopes the query to the actor when they lack CATEGORY_VIEW', async () => {
+    it('always scopes the query to the actor', async () => {
       repository.findMany.mockResolvedValue({ items: [makeCategoryRecord()], total: 1 });
       await service.listCategories({ page: 1, pageSize: 20, sortBy: 'createdAt', sortOrder: 'desc' }, stranger);
       expect(repository.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ userId: stranger.id }),
-        expect.anything(),
-        'createdAt',
-        'desc',
-      );
-    });
-
-    it('does not scope the query when the actor holds CATEGORY_VIEW', async () => {
-      rbacService.hasPermission.mockResolvedValue(true);
-      repository.findMany.mockResolvedValue({ items: [makeCategoryRecord()], total: 1 });
-      await service.listCategories({ page: 1, pageSize: 20, sortBy: 'createdAt', sortOrder: 'desc' }, stranger);
-      expect(repository.findMany).toHaveBeenCalledWith(
-        expect.not.objectContaining({ userId: expect.anything() }),
         expect.anything(),
         'createdAt',
         'desc',

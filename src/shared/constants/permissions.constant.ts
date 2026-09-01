@@ -65,10 +65,20 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleName, PermissionKey[]> = {
   // An admin manages people but cannot delete them or reshape the role system —
   // those stay with SUPER_ADMIN.
   [ROLES.ADMIN]: [PERMISSIONS.USER_VIEW, PERMISSIONS.USER_CREATE, PERMISSIONS.USER_EDIT],
-  // A standard user holds no permissions at all. That is not an oversight:
-  // editing their *own* profile is an ownership rule enforced in UserService,
-  // not a permission. See docs/architecture.md on role vs ownership
-  // authorization. Grant this role whatever your domain's read permissions turn
-  // out to be.
-  [ROLES.USER]: [],
+  // A standard user gets expense/category access by default so they can track
+  // their own spending. Editing their *own* profile, expenses, and categories
+  // is an ownership rule enforced in the relevant service, not a permission —
+  // see docs/architecture.md on role vs ownership authorization. These
+  // permissions only gate whether the feature is usable at all; ownership
+  // always scopes each user to their own records, with no bypass for any role.
+  [ROLES.USER]: [
+    PERMISSIONS.CATEGORY_CREATE,
+    PERMISSIONS.CATEGORY_VIEW,
+    PERMISSIONS.CATEGORY_EDIT,
+    PERMISSIONS.CATEGORY_DELETE,
+    PERMISSIONS.EXPENSE_CREATE,
+    PERMISSIONS.EXPENSE_VIEW,
+    PERMISSIONS.EXPENSE_EDIT,
+    PERMISSIONS.EXPENSE_DELETE,
+  ],
 };

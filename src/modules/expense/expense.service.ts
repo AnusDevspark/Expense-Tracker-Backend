@@ -1,8 +1,6 @@
 import { ForbiddenError, NotFoundError } from '@/errors';
 import { buildPaginationMeta, getPagination } from '@/shared/utils/pagination.util';
-import { PERMISSIONS } from '@/shared/constants/permissions.constant';
 import type { PaginationMeta } from '@/shared/response/response-envelope';
-import type { RbacService } from '@/modules/rbac/rbac.service';
 import type { ExpenseRepository } from '@/modules/expense/expense.repository';
 import { mapExpensesToResponse, mapExpenseToResponse } from '@/modules/expense/expense.mapper';
 import type { ExpenseResponse } from '@/modules/expense/expense.types';
@@ -17,23 +15,24 @@ export interface PaginatedExpenses {
 /**
  * Expense business rules. No Express here — no Request, no Response, no
  * status codes — which is what makes this unit-testable against a mocked
- * repository. Add ownership/authorization rules at the top of the relevant
- * method, not in middleware, per AGENTS.md.
+ * repository.
+ *
+ * Ownership is absolute: an expense belongs to exactly the user who created
+ * it, with no permission that bypasses that — EXPENSE_VIEW/EDIT/DELETE only
+ * gate whether a role can use the feature at all (enforced at the route),
+ * never whose records it can touch. See AGENTS.md and
+ * permissions.constant.ts's note on the USER role's default grants.
  */
 export class ExpenseService {
-  constructor(
-    private readonly expenseRepository: ExpenseRepository,
-    private readonly rbacService: RbacService,
-  ) {}
+  constructor(private readonly expenseRepository: ExpenseRepository) {}
 
   async listExpenses(query: ListExpensesQuery, actor: AuthenticatedUser): Promise<PaginatedExpenses> {
     const pagination = getPagination(query);
-    const canViewAny = await this.rbacService.hasPermission(actor.role, PERMISSIONS.EXPENSE_VIEW);
 
     const { items, total } = await this.expenseRepository.findMany(
       {
         search: query.search,
-        ...(canViewAny ? {} : { userId: actor.id }),
+        userId: actor.id,
       },
       pagination,
       query.sortBy,
@@ -50,9 +49,7 @@ export class ExpenseService {
     const expense = await this.expenseRepository.findById(id);
     if (!expense) throw new NotFoundError('Expense not found');
 
-    const isSelf = actor.id === expense.userId;
-    const canViewAny = await this.rbacService.hasPermission(actor.role, PERMISSIONS.EXPENSE_VIEW);
-    if (!isSelf && !canViewAny) {
+    if (expense.userId !== actor.id) {
       throw new ForbiddenError('You can only view your own expenses');
     }
 
@@ -76,9 +73,7 @@ export class ExpenseService {
     const existing = await this.expenseRepository.findById(id);
     if (!existing) throw new NotFoundError('Expense not found');
 
-    const isSelf = actor.id === existing.userId;
-    const canEditAny = await this.rbacService.hasPermission(actor.role, PERMISSIONS.EXPENSE_EDIT);
-    if (!isSelf && !canEditAny) {
+    if (existing.userId !== actor.id) {
       throw new ForbiddenError('You can only modify your own expenses');
     }
 
@@ -97,9 +92,7 @@ export class ExpenseService {
     const existing = await this.expenseRepository.findById(id);
     if (!existing) throw new NotFoundError('Expense not found');
 
-    const isSelf = actor.id === existing.userId;
-    const canDeleteAny = await this.rbacService.hasPermission(actor.role, PERMISSIONS.EXPENSE_DELETE);
-    if (!isSelf && !canDeleteAny) {
+    if (existing.userId !== actor.id) {
       throw new ForbiddenError('You can only delete your own expenses');
     }
 

@@ -7,10 +7,9 @@ import type { CreateExpenseInput } from '@/modules/expense/expense.schema';
 import type { AuthenticatedUser } from '@/shared/types/authenticated-user.type';
 
 /**
- * Business rules covered here: ownership. A caller may always act on their own
- * expenses; acting on someone else's requires the matching permission
- * (EXPENSE_VIEW/EDIT/DELETE doubling as the "any expense" grant), mirroring
- * UserService.updateUser. See AGENTS.md.
+ * Business rule covered here: ownership is absolute. A caller may only ever
+ * act on their own expenses — there is no permission that bypasses this. See
+ * AGENTS.md and expense.service.ts's doc comment.
  */
 
 function createMockRepository() {
@@ -20,12 +19,6 @@ function createMockRepository() {
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
-  };
-}
-
-function createMockRbacService(hasPermission = false) {
-  return {
-    hasPermission: vi.fn().mockResolvedValue(hasPermission),
   };
 }
 
@@ -62,18 +55,15 @@ const sampleInput: CreateExpenseInput = {
   amount: 123.45,
   date: new Date('2026-01-02T03:04:05.678Z'),
   categoryId: '11111111-1111-4111-8111-111111111111',
-  userId: '22222222-2222-4222-8222-222222222222',
 };
 
 describe('ExpenseService', () => {
   let repository: ReturnType<typeof createMockRepository>;
-  let rbacService: ReturnType<typeof createMockRbacService>;
   let service: ExpenseService;
 
   beforeEach(() => {
     repository = createMockRepository();
-    rbacService = createMockRbacService(false);
-    service = new ExpenseService(repository as never, rbacService as never);
+    service = new ExpenseService(repository as never);
   });
 
   describe('getExpenseById', () => {
@@ -88,18 +78,11 @@ describe('ExpenseService', () => {
       expect(result.id).toBe('11111111-1111-4111-8111-111111111111');
     });
 
-    it('throws ForbiddenError for a non-owner without EXPENSE_VIEW', async () => {
+    it('throws ForbiddenError for a non-owner', async () => {
       repository.findById.mockResolvedValue(makeExpenseRecord());
       await expect(
         service.getExpenseById('11111111-1111-4111-8111-111111111111', stranger),
       ).rejects.toThrow(ForbiddenError);
-    });
-
-    it('allows a non-owner holding EXPENSE_VIEW', async () => {
-      rbacService.hasPermission.mockResolvedValue(true);
-      repository.findById.mockResolvedValue(makeExpenseRecord());
-      const result = await service.getExpenseById('11111111-1111-4111-8111-111111111111', stranger);
-      expect(result.id).toBe('11111111-1111-4111-8111-111111111111');
     });
   });
 
@@ -138,24 +121,12 @@ describe('ExpenseService', () => {
       });
     });
 
-    it('throws ForbiddenError for a non-owner without EXPENSE_EDIT', async () => {
+    it('throws ForbiddenError for a non-owner', async () => {
       repository.findById.mockResolvedValue(makeExpenseRecord());
       await expect(
         service.updateExpense('11111111-1111-4111-8111-111111111111', sampleInput, stranger),
       ).rejects.toThrow(ForbiddenError);
       expect(repository.update).not.toHaveBeenCalled();
-    });
-
-    it('allows a non-owner holding EXPENSE_EDIT', async () => {
-      rbacService.hasPermission.mockResolvedValue(true);
-      repository.findById.mockResolvedValue(makeExpenseRecord());
-      repository.update.mockResolvedValue(makeExpenseRecord());
-      const result = await service.updateExpense(
-        '11111111-1111-4111-8111-111111111111',
-        sampleInput,
-        stranger,
-      );
-      expect(result.id).toBe('11111111-1111-4111-8111-111111111111');
     });
   });
 
@@ -172,7 +143,7 @@ describe('ExpenseService', () => {
       expect(repository.delete).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111');
     });
 
-    it('throws ForbiddenError for a non-owner without EXPENSE_DELETE', async () => {
+    it('throws ForbiddenError for a non-owner', async () => {
       repository.findById.mockResolvedValue(makeExpenseRecord());
       await expect(
         service.deleteExpense('11111111-1111-4111-8111-111111111111', stranger),
@@ -182,23 +153,11 @@ describe('ExpenseService', () => {
   });
 
   describe('listExpenses', () => {
-    it('scopes the query to the actor when they lack EXPENSE_VIEW', async () => {
+    it('always scopes the query to the actor', async () => {
       repository.findMany.mockResolvedValue({ items: [makeExpenseRecord()], total: 1 });
       await service.listExpenses({ page: 1, pageSize: 20, sortBy: 'createdAt', sortOrder: 'desc' }, stranger);
       expect(repository.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ userId: stranger.id }),
-        expect.anything(),
-        'createdAt',
-        'desc',
-      );
-    });
-
-    it('does not scope the query when the actor holds EXPENSE_VIEW', async () => {
-      rbacService.hasPermission.mockResolvedValue(true);
-      repository.findMany.mockResolvedValue({ items: [makeExpenseRecord()], total: 1 });
-      await service.listExpenses({ page: 1, pageSize: 20, sortBy: 'createdAt', sortOrder: 'desc' }, stranger);
-      expect(repository.findMany).toHaveBeenCalledWith(
-        expect.not.objectContaining({ userId: expect.anything() }),
         expect.anything(),
         'createdAt',
         'desc',
