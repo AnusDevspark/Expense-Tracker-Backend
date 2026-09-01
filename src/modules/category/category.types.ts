@@ -42,11 +42,11 @@ export interface UpdateCategoryData {
   name?: string;
   type?: CategoryType;
   icon?: string;
-  userId?: string;
 }
 
 /** Whitelisted filters. */
 export interface CategoryListFilters {
   search?: string;
   type?: CategoryType;
+  userId?: string;
 }

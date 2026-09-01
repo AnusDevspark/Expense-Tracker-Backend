@@ -14,13 +14,15 @@ export class ExpenseController {
 
   listExpenses = async (req: Request, res: Response): Promise<void> => {
     const query = req.query as unknown as ListExpensesQuery;
-    const { expenses, meta } = await this.expenseService.listExpenses(query);
+    const actor = requireAuthenticatedUser(req);
+    const { expenses, meta } = await this.expenseService.listExpenses(query, actor);
     sendPaginated(res, expenses, meta);
   };
 
   getExpense = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params as ExpenseIdParam;
-    const expense = await this.expenseService.getExpenseById(id);
+    const actor = requireAuthenticatedUser(req);
+    const expense = await this.expenseService.getExpenseById(id, actor);
     sendSuccess(res, expense);
   };
 
@@ -41,7 +43,8 @@ export class ExpenseController {
 
   deleteExpense = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params as ExpenseIdParam;
-    await this.expenseService.deleteExpense(id);
+    const actor = requireAuthenticatedUser(req);
+    await this.expenseService.deleteExpense(id, actor);
     sendNoContent(res);
   };
 }

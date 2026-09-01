@@ -36,7 +36,7 @@ export class ExpenseRepository {
   private buildWhere(filters: ExpenseListFilters) {
     return {
       ...omitUndefined({
-        // no equality filters — add one per field that needs it
+        userId: filters.userId,
       }),
       ...buildSearchFilter(EXPENSE_SEARCH_FIELDS, filters.search),
     };
@@ -99,7 +99,6 @@ export class ExpenseRepository {
           amount: data.amount,
           date: data.date,
           categoryId: data.categoryId,
-          userId: data.userId,
         }),
       }),
     );

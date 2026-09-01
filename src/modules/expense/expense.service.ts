@@ -1,6 +1,8 @@
-import { NotFoundError } from '@/errors';
+import { ForbiddenError, NotFoundError } from '@/errors';
 import { buildPaginationMeta, getPagination } from '@/shared/utils/pagination.util';
+import { PERMISSIONS } from '@/shared/constants/permissions.constant';
 import type { PaginationMeta } from '@/shared/response/response-envelope';
+import type { RbacService } from '@/modules/rbac/rbac.service';
 import type { ExpenseRepository } from '@/modules/expense/expense.repository';
 import { mapExpensesToResponse, mapExpenseToResponse } from '@/modules/expense/expense.mapper';
 import type { ExpenseResponse } from '@/modules/expense/expense.types';
@@ -19,15 +21,19 @@ export interface PaginatedExpenses {
  * method, not in middleware, per AGENTS.md.
  */
 export class ExpenseService {
-  constructor(private readonly expenseRepository: ExpenseRepository) {}
+  constructor(
+    private readonly expenseRepository: ExpenseRepository,
+    private readonly rbacService: RbacService,
+  ) {}
 
-  async listExpenses(query: ListExpensesQuery): Promise<PaginatedExpenses> {
+  async listExpenses(query: ListExpensesQuery, actor: AuthenticatedUser): Promise<PaginatedExpenses> {
     const pagination = getPagination(query);
+    const canViewAny = await this.rbacService.hasPermission(actor.role, PERMISSIONS.EXPENSE_VIEW);
 
     const { items, total } = await this.expenseRepository.findMany(
       {
         search: query.search,
-
+        ...(canViewAny ? {} : { userId: actor.id }),
       },
       pagination,
       query.sortBy,
@@ -40,9 +46,16 @@ export class ExpenseService {
     };
   }
 
-  async getExpenseById(id: string): Promise<ExpenseResponse> {
+  async getExpenseById(id: string, actor: AuthenticatedUser): Promise<ExpenseResponse> {
     const expense = await this.expenseRepository.findById(id);
     if (!expense) throw new NotFoundError('Expense not found');
+
+    const isSelf = actor.id === expense.userId;
+    const canViewAny = await this.rbacService.hasPermission(actor.role, PERMISSIONS.EXPENSE_VIEW);
+    if (!isSelf && !canViewAny) {
+      throw new ForbiddenError('You can only view your own expenses');
+    }
+
     return mapExpenseToResponse(expense);
   }
 
@@ -63,21 +76,33 @@ export class ExpenseService {
     const existing = await this.expenseRepository.findById(id);
     if (!existing) throw new NotFoundError('Expense not found');
 
+    const isSelf = actor.id === existing.userId;
+    const canEditAny = await this.rbacService.hasPermission(actor.role, PERMISSIONS.EXPENSE_EDIT);
+    if (!isSelf && !canEditAny) {
+      throw new ForbiddenError('You can only modify your own expenses');
+    }
+
     const updated = await this.expenseRepository.update(id, {
       title: input.title,
       description: input.description,
       amount: input.amount,
       date: input.date,
       categoryId: input.categoryId,
-      userId: actor.id,
     });
 
     return mapExpenseToResponse(updated);
   }
 
-  async deleteExpense(id: string): Promise<void> {
+  async deleteExpense(id: string, actor: AuthenticatedUser): Promise<void> {
     const existing = await this.expenseRepository.findById(id);
     if (!existing) throw new NotFoundError('Expense not found');
+
+    const isSelf = actor.id === existing.userId;
+    const canDeleteAny = await this.rbacService.hasPermission(actor.role, PERMISSIONS.EXPENSE_DELETE);
+    if (!isSelf && !canDeleteAny) {
+      throw new ForbiddenError('You can only delete your own expenses');
+    }
+
     await this.expenseRepository.delete(id);
   }
 }

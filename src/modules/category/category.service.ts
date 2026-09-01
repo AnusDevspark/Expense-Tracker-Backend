@@ -1,6 +1,8 @@
-import { NotFoundError } from '@/errors';
+import { ForbiddenError, NotFoundError } from '@/errors';
 import { buildPaginationMeta, getPagination } from '@/shared/utils/pagination.util';
+import { PERMISSIONS } from '@/shared/constants/permissions.constant';
 import type { PaginationMeta } from '@/shared/response/response-envelope';
+import type { RbacService } from '@/modules/rbac/rbac.service';
 import type { CategoryRepository } from '@/modules/category/category.repository';
 import { mapCategoriesToResponse, mapCategoryToResponse } from '@/modules/category/category.mapper';
 import type { CategoryResponse } from '@/modules/category/category.types';
@@ -19,15 +21,20 @@ export interface PaginatedCategories {
  * method, not in middleware, per AGENTS.md.
  */
 export class CategoryService {
-  constructor(private readonly categoryRepository: CategoryRepository) {}
+  constructor(
+    private readonly categoryRepository: CategoryRepository,
+    private readonly rbacService: RbacService,
+  ) {}
 
-  async listCategories(query: ListCategoriesQuery): Promise<PaginatedCategories> {
+  async listCategories(query: ListCategoriesQuery, actor: AuthenticatedUser): Promise<PaginatedCategories> {
     const pagination = getPagination(query);
+    const canViewAny = await this.rbacService.hasPermission(actor.role, PERMISSIONS.CATEGORY_VIEW);
 
     const { items, total } = await this.categoryRepository.findMany(
       {
         search: query.search,
         type: query.type,
+        ...(canViewAny ? {} : { userId: actor.id }),
       },
       pagination,
       query.sortBy,
@@ -40,9 +47,16 @@ export class CategoryService {
     };
   }
 
-  async getCategoryById(id: string): Promise<CategoryResponse> {
+  async getCategoryById(id: string, actor: AuthenticatedUser): Promise<CategoryResponse> {
     const category = await this.categoryRepository.findById(id);
     if (!category) throw new NotFoundError('Category not found');
+
+    const isSelf = actor.id === category.userId;
+    const canViewAny = await this.rbacService.hasPermission(actor.role, PERMISSIONS.CATEGORY_VIEW);
+    if (!isSelf && !canViewAny) {
+      throw new ForbiddenError('You can only view your own categories');
+    }
+
     return mapCategoryToResponse(category);
   }
 
@@ -61,19 +75,31 @@ export class CategoryService {
     const existing = await this.categoryRepository.findById(id);
     if (!existing) throw new NotFoundError('Category not found');
 
+    const isSelf = actor.id === existing.userId;
+    const canEditAny = await this.rbacService.hasPermission(actor.role, PERMISSIONS.CATEGORY_EDIT);
+    if (!isSelf && !canEditAny) {
+      throw new ForbiddenError('You can only modify your own categories');
+    }
+
     const updated = await this.categoryRepository.update(id, {
       name: input.name,
       type: input.type,
       icon: input.icon,
-      userId: actor.id,
     });
 
     return mapCategoryToResponse(updated);
   }
 
-  async deleteCategory(id: string): Promise<void> {
+  async deleteCategory(id: string, actor: AuthenticatedUser): Promise<void> {
     const existing = await this.categoryRepository.findById(id);
     if (!existing) throw new NotFoundError('Category not found');
+
+    const isSelf = actor.id === existing.userId;
+    const canDeleteAny = await this.rbacService.hasPermission(actor.role, PERMISSIONS.CATEGORY_DELETE);
+    if (!isSelf && !canDeleteAny) {
+      throw new ForbiddenError('You can only delete your own categories');
+    }
+
     await this.categoryRepository.delete(id);
   }
 }

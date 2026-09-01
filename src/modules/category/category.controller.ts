@@ -14,13 +14,15 @@ export class CategoryController {
 
   listCategories = async (req: Request, res: Response): Promise<void> => {
     const query = req.query as unknown as ListCategoriesQuery;
-    const { categorys, meta } = await this.categoryService.listCategories(query);
+    const actor = req.user as AuthenticatedUser;
+    const { categorys, meta } = await this.categoryService.listCategories(query, actor);
     sendPaginated(res, categorys, meta);
   };
 
   getCategory = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params as CategoryIdParam;
-    const category = await this.categoryService.getCategoryById(id);
+    const actor = req.user as AuthenticatedUser;
+    const category = await this.categoryService.getCategoryById(id, actor);
     sendSuccess(res, category);
   };
 
@@ -41,7 +43,8 @@ export class CategoryController {
 
   deleteCategory = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params as CategoryIdParam;
-    await this.categoryService.deleteCategory(id);
+    const actor = req.user as AuthenticatedUser;
+    await this.categoryService.deleteCategory(id, actor);
     sendNoContent(res);
   };
 }

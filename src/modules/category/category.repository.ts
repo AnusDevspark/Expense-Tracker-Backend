@@ -34,6 +34,7 @@ export class CategoryRepository {
     return {
       ...omitUndefined({
         type: filters.type,
+        userId: filters.userId,
       }),
       ...buildSearchFilter(CATEGORY_SEARCH_FIELDS, filters.search),
     };
@@ -92,7 +93,6 @@ export class CategoryRepository {
           name: data.name,
           type: data.type,
           icon: data.icon,
-          userId: data.userId,
         }),
       }),
     );

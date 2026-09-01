@@ -50,10 +50,10 @@ export interface UpdateExpenseData {
   amount?: number;
   date?: Date;
   categoryId?: string;
-  userId?: string;
 }
 
 /** Whitelisted filters. */
 export interface ExpenseListFilters {
   search?: string;
+  userId?: string;
 }
