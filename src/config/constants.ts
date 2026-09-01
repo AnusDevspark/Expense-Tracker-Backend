@@ -19,5 +19,5 @@ export const HEADERS = {
 
 export const AUTH_SCHEME = 'Bearer';
 
-export const SERVICE_NAME = 'node-backend-template';
+export const SERVICE_NAME = 'expense-tracker-backend';
 export const SERVICE_VERSION = '1.0.0';

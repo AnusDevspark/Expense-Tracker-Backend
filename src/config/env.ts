@@ -36,8 +36,8 @@ const envSchema = z.object({
   // 32 characters is the floor for a secret that is not trivially brute-forced.
   JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET must be at least 32 characters'),
   JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be at least 32 characters'),
-  JWT_ISSUER: z.string().min(1).default('node-backend-template'),
-  JWT_AUDIENCE: z.string().min(1).default('node-backend-template-api'),
+  JWT_ISSUER: z.string().min(1).default('expense-tracker-backend'),
+  JWT_AUDIENCE: z.string().min(1).default('expense-tracker-backend-api'),
   JWT_ACCESS_EXPIRES_IN: durationString.default('15m'),
   JWT_REFRESH_EXPIRES_IN: durationString.default('7d'),
 

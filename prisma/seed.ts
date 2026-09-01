@@ -131,7 +131,7 @@ async function seedAdmin(roleIds: Map<string, string>): Promise<void> {
  * share one throwaway password, which is safe precisely because this never runs
  * in production.
  */
-const SAMPLE_USER_PASSWORD = 'DevPassword123!';
+const SAMPLE_USER_PASSWORD = 'Test@1234';
 
 async function seedSampleUsers(roleIds: Map<string, string>): Promise<void> {
   if (process.env['NODE_ENV'] === 'production') {

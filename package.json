@@ -1,5 +1,5 @@
 {
-  "name": "node-backend-template",
+  "name": "expense-tracker-backend",
   "version": "1.0.0",
   "description": "Production-ready modular-monolith Node.js backend starter: Express 5, TypeScript, Prisma 7, PostgreSQL, Zod, JWT auth with refresh rotation, RBAC, OpenAPI, Vitest.",
   "private": true,
