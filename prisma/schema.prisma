@@ -43,8 +43,10 @@ model User {
 
   refreshSessions RefreshSession[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  categories Category[]
+  expenses   Expense[]
 
   // email is already indexed by @unique — that index serves the login lookup.
   @@index([roleId]) // permission resolution joins Role on every authorize call
@@ -142,3 +144,42 @@ model RefreshSession {
 // whitelisted sorting and search. Copy `src/modules/user/` as the starting
 // shape for your first real model, and see docs/adding-a-module.md for the
 // step-by-step version.
+
+enum CategoryType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
+
+model Category {
+  id        String       @id @default(uuid()) @db.Uuid
+  name      String       @db.VarChar(100)
+  type      CategoryType
+  icon      String?      @db.VarChar(100)
+  userId    String       @db.Uuid
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  expenses  Expense[]
+
+  @@index([userId]) // list categories for a user
+  @@map("categories")
+}
+
+model Expense {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String   @db.VarChar(100)
+  description String?  @db.VarChar(255)
+  amount      Decimal  @db.Decimal(10, 2)
+  date        DateTime
+  categoryId  String   @db.Uuid
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  userId      String   @db.Uuid
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, date]) // list expenses for a user
+  @@index([categoryId]) // list expenses for a category
+  @@map("expenses")
+}

@@ -20,6 +20,11 @@ export const PERMISSIONS = {
   USER_DELETE: 'USER_DELETE',
 
   ROLE_MANAGE: 'ROLE_MANAGE',
+
+  CATEGORY_VIEW: 'CATEGORY_VIEW',
+  CATEGORY_CREATE: 'CATEGORY_CREATE',
+  CATEGORY_EDIT: 'CATEGORY_EDIT',
+  CATEGORY_DELETE: 'CATEGORY_DELETE',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -32,6 +37,11 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionKey, string> = {
   USER_EDIT: 'Modify user accounts',
   USER_DELETE: 'Delete user accounts',
   ROLE_MANAGE: 'Create roles and change their permissions',
+
+  CATEGORY_VIEW: 'List and read categories',
+  CATEGORY_CREATE: 'Create categories',
+  CATEGORY_EDIT: 'Modify categories',
+  CATEGORY_DELETE: 'Delete categories',
 };
 
 /**

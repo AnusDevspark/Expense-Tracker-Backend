@@ -20,7 +20,7 @@ import { ROLES, type RoleName } from '@/shared/constants/roles.constant';
  */
 
 /** Every table, in one statement. Add new tables here when the schema grows. */
-const TABLES = ['refresh_sessions', 'role_permissions', 'users', 'permissions', 'roles'];
+const TABLES = ['refresh_sessions', 'role_permissions', 'users', 'permissions', 'roles', 'categories'];
 
 export async function resetDatabase(): Promise<void> {
   await prisma.$executeRawUnsafe(

@@ -14,6 +14,12 @@ import {
   updateUserSchema,
   userIdParamSchema,
 } from '@/modules/user/user.schema';
+import {
+  createCategorySchema,
+  listCategoriesQuerySchema,
+  updateCategorySchema,
+  categoryIdParamSchema,
+} from '@/modules/category/category.schema';
 
 /**
  * ===========================================================================
@@ -60,6 +66,16 @@ const userResponseSchema = z.object({
   email: z.email(),
   status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']),
   role: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const categoryResponseSchema = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  type: z.enum(['INCOME', 'EXPENSE', 'TRANSFER']),
+  icon: z.string().nullable(),
+  userId: z.uuid(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -171,6 +187,7 @@ export function buildOpenApiDocument(): ReturnType<typeof createDocument> {
     tags: [
       { name: 'Auth', description: 'Registration, login, token lifecycle' },
       { name: 'Users', description: 'User administration (permission gated)' },
+      { name: 'Categories', description: 'Categories (permission gated)' },
     ],
     components: {
       securitySchemes: {
@@ -359,6 +376,85 @@ export function buildOpenApiDocument(): ReturnType<typeof createDocument> {
           description: 'Requires USER_DELETE. You cannot delete your own account.',
           security: bearerAuth,
           requestParams: { path: userIdParamSchema },
+          responses: {
+            '204': { description: 'Deleted' },
+            ...notFoundResponse,
+            ...commonErrors,
+          },
+        },
+      },
+
+      // --------------------------------------------------------------- Categories
+      '/categories': {
+     get: {
+       tags: ['Categories'],
+       summary: 'List categories',
+       description: 'Requires CATEGORY_VIEW.',
+       security: bearerAuth,
+       requestParams: { query: listCategoriesQuerySchema },
+       responses: {
+         '200': {
+           description: 'Paginated categories',
+           content: { 'application/json': { schema: paginatedOf(categoryResponseSchema) } },
+         },
+         ...commonErrors,
+       },
+     },
+     post: {
+       tags: ['Categories'],
+       summary: 'Create a category',
+       description: 'Requires CATEGORY_CREATE.',
+       security: bearerAuth,
+       requestBody: { content: { 'application/json': { schema: createCategorySchema } } },
+       responses: {
+         '201': {
+           description: 'Category created',
+           content: { 'application/json': { schema: successOf(categoryResponseSchema) } },
+         },
+         ...conflictResponse,
+         ...commonErrors,
+       },
+     },
+      },
+
+      '/categories/{id}': {
+        get: {
+          tags: ['Categories'],
+          summary: 'Get a category',
+          description: 'Requires CATEGORY_VIEW.',
+          security: bearerAuth,
+          requestParams: { path: categoryIdParamSchema },
+          responses: {
+            '200': {
+              description: 'The category',
+              content: { 'application/json': { schema: successOf(categoryResponseSchema) } },
+            },
+            ...notFoundResponse,
+            ...commonErrors,
+          },
+        },
+        patch: {
+          tags: ['Categories'],
+          summary: 'Update a category',
+          description: 'Requires CATEGORY_EDIT.',
+          security: bearerAuth,
+          requestParams: { path: categoryIdParamSchema },
+          requestBody: { content: { 'application/json': { schema: updateCategorySchema } } },
+          responses: {
+            '200': {
+              description: 'Updated category',
+              content: { 'application/json': { schema: successOf(categoryResponseSchema) } },
+            },
+            ...notFoundResponse,
+            ...commonErrors,
+          },
+        },
+        delete: {
+          tags: ['Categories'],
+          summary: 'Delete a category',
+          description: 'Requires CATEGORY_DELETE.',
+          security: bearerAuth,
+          requestParams: { path: categoryIdParamSchema },
           responses: {
             '204': { description: 'Deleted' },
             ...notFoundResponse,

@@ -19,6 +19,11 @@ import { AuthController } from '@/modules/auth/auth.controller';
 import { createAuthRouter } from '@/modules/auth/auth.routes';
 import { ConsoleEmailService } from '@/modules/auth/email.service';
 
+import { CategoryRepository } from '@/modules/category/category.repository';
+import { CategoryService } from '@/modules/category/category.service';
+import { CategoryController } from '@/modules/category/category.controller';
+import { createCategoryRouter } from '@/modules/category/category.routes';
+
 /**
  * ===========================================================================
  * Composition root
@@ -46,6 +51,7 @@ export function createApiRouter(prisma: PrismaClientInstance): Router {
   const rbacRepository = new RbacRepository(prisma);
   const userRepository = new UserRepository(prisma);
   const authRepository = new AuthRepository(prisma);
+  const categoryRepository = new CategoryRepository(prisma);
 
   // --- Services (business logic) -------------------------------------------
   const rbacService = new RbacService(rbacRepository);
@@ -57,10 +63,12 @@ export function createApiRouter(prisma: PrismaClientInstance): Router {
     rbacService,
     emailService,
   );
+  const categoryService = new CategoryService(categoryRepository);
 
   // --- Controllers (HTTP) ---------------------------------------------------
   const userController = new UserController(userService);
   const authController = new AuthController(authService);
+  const categoryController = new CategoryController(categoryService);
 
   // --- Middleware that needs dependencies -----------------------------------
   // These are factories rather than plain middleware precisely so they can be
@@ -91,6 +99,8 @@ export function createApiRouter(prisma: PrismaClientInstance): Router {
     '/users',
     createUserRouter({ controller: userController, authenticate, requirePermission }),
   );
+
+  apiRouter.use('/categories', createCategoryRouter({ controller: categoryController, authenticate, requirePermission }));
 
   // Mount the whole versioned surface under one prefix.
   const router = Router();
