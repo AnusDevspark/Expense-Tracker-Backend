@@ -24,6 +24,11 @@ import { CategoryService } from '@/modules/category/category.service';
 import { CategoryController } from '@/modules/category/category.controller';
 import { createCategoryRouter } from '@/modules/category/category.routes';
 
+import { ExpenseRepository } from '@/modules/expense/expense.repository';
+import { ExpenseService } from '@/modules/expense/expense.service';
+import { ExpenseController } from '@/modules/expense/expense.controller';
+import { createExpenseRouter } from '@/modules/expense/expense.routes';
+
 /**
  * ===========================================================================
  * Composition root
@@ -52,6 +57,7 @@ export function createApiRouter(prisma: PrismaClientInstance): Router {
   const userRepository = new UserRepository(prisma);
   const authRepository = new AuthRepository(prisma);
   const categoryRepository = new CategoryRepository(prisma);
+  const expenseRepository = new ExpenseRepository(prisma);
 
   // --- Services (business logic) -------------------------------------------
   const rbacService = new RbacService(rbacRepository);
@@ -64,11 +70,13 @@ export function createApiRouter(prisma: PrismaClientInstance): Router {
     emailService,
   );
   const categoryService = new CategoryService(categoryRepository);
+  const expenseService = new ExpenseService(expenseRepository);
 
   // --- Controllers (HTTP) ---------------------------------------------------
   const userController = new UserController(userService);
   const authController = new AuthController(authService);
   const categoryController = new CategoryController(categoryService);
+  const expenseController = new ExpenseController(expenseService);
 
   // --- Middleware that needs dependencies -----------------------------------
   // These are factories rather than plain middleware precisely so they can be
@@ -101,6 +109,7 @@ export function createApiRouter(prisma: PrismaClientInstance): Router {
   );
 
   apiRouter.use('/categories', createCategoryRouter({ controller: categoryController, authenticate, requirePermission }));
+  apiRouter.use('/expenses', createExpenseRouter({ controller: expenseController, authenticate, requirePermission }));
 
   // Mount the whole versioned surface under one prefix.
   const router = Router();

@@ -20,6 +20,12 @@ import {
   updateCategorySchema,
   categoryIdParamSchema,
 } from '@/modules/category/category.schema';
+import {
+  createExpenseSchema,
+  listExpensesQuerySchema,
+  updateExpenseSchema,
+  expenseIdParamSchema,
+} from '@/modules/expense/expense.schema';
 
 /**
  * ===========================================================================
@@ -75,6 +81,18 @@ const categoryResponseSchema = z.object({
   name: z.string(),
   type: z.enum(['INCOME', 'EXPENSE', 'TRANSFER']),
   icon: z.string().nullable(),
+  userId: z.uuid(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const expenseResponseSchema = z.object({
+  id: z.uuid(),
+  title: z.string(),
+  description: z.string().nullable(),
+  amount: z.number(),
+  date: z.string(),
+  categoryId: z.uuid(),
   userId: z.uuid(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -188,6 +206,7 @@ export function buildOpenApiDocument(): ReturnType<typeof createDocument> {
       { name: 'Auth', description: 'Registration, login, token lifecycle' },
       { name: 'Users', description: 'User administration (permission gated)' },
       { name: 'Categories', description: 'Categories (permission gated)' },
+      { name: 'Expenses', description: 'Expenses (permission gated)' },
     ],
     components: {
       securitySchemes: {
@@ -455,6 +474,85 @@ export function buildOpenApiDocument(): ReturnType<typeof createDocument> {
           description: 'Requires CATEGORY_DELETE.',
           security: bearerAuth,
           requestParams: { path: categoryIdParamSchema },
+          responses: {
+            '204': { description: 'Deleted' },
+            ...notFoundResponse,
+            ...commonErrors,
+          },
+        },
+      },
+
+      // --------------------------------------------------------------- Expenses
+      '/expenses': {
+     get: {
+       tags: ['Expenses'],
+       summary: 'List expenses',
+       description: 'Requires EXPENSE_VIEW.',
+       security: bearerAuth,
+       requestParams: { query: listExpensesQuerySchema },
+       responses: {
+         '200': {
+           description: 'Paginated expenses',
+           content: { 'application/json': { schema: paginatedOf(expenseResponseSchema) } },
+         },
+         ...commonErrors,
+       },
+     },
+     post: {
+       tags: ['Expenses'],
+       summary: 'Create an expense',
+       description: 'Requires EXPENSE_CREATE.',
+       security: bearerAuth,
+       requestBody: { content: { 'application/json': { schema: createExpenseSchema } } },
+       responses: {
+         '201': {
+           description: 'Expense created',
+           content: { 'application/json': { schema: successOf(expenseResponseSchema) } },
+         },
+         ...conflictResponse,
+         ...commonErrors,
+       },
+     },
+      },
+
+      '/expenses/{id}': {
+        get: {
+          tags: ['Expenses'],
+          summary: 'Get an expense',
+          description: 'Requires EXPENSE_VIEW.',
+          security: bearerAuth,
+          requestParams: { path: expenseIdParamSchema },
+          responses: {
+            '200': {
+              description: 'The expense',
+              content: { 'application/json': { schema: successOf(expenseResponseSchema) } },
+            },
+            ...notFoundResponse,
+            ...commonErrors,
+          },
+        },
+        patch: {
+          tags: ['Expenses'],
+          summary: 'Update an expense',
+          description: 'Requires EXPENSE_EDIT.',
+          security: bearerAuth,
+          requestParams: { path: expenseIdParamSchema },
+          requestBody: { content: { 'application/json': { schema: updateExpenseSchema } } },
+          responses: {
+            '200': {
+              description: 'Updated expense',
+              content: { 'application/json': { schema: successOf(expenseResponseSchema) } },
+            },
+            ...notFoundResponse,
+            ...commonErrors,
+          },
+        },
+        delete: {
+          tags: ['Expenses'],
+          summary: 'Delete an expense',
+          description: 'Requires EXPENSE_DELETE.',
+          security: bearerAuth,
+          requestParams: { path: expenseIdParamSchema },
           responses: {
             '204': { description: 'Deleted' },
             ...notFoundResponse,

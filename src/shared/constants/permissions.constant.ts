@@ -25,6 +25,11 @@ export const PERMISSIONS = {
   CATEGORY_CREATE: 'CATEGORY_CREATE',
   CATEGORY_EDIT: 'CATEGORY_EDIT',
   CATEGORY_DELETE: 'CATEGORY_DELETE',
+
+  EXPENSE_VIEW: 'EXPENSE_VIEW',
+  EXPENSE_CREATE: 'EXPENSE_CREATE',
+  EXPENSE_EDIT: 'EXPENSE_EDIT',
+  EXPENSE_DELETE: 'EXPENSE_DELETE',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -42,6 +47,11 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionKey, string> = {
   CATEGORY_CREATE: 'Create categories',
   CATEGORY_EDIT: 'Modify categories',
   CATEGORY_DELETE: 'Delete categories',
+
+  EXPENSE_VIEW: 'List and read expenses',
+  EXPENSE_CREATE: 'Create expenses',
+  EXPENSE_EDIT: 'Modify expenses',
+  EXPENSE_DELETE: 'Delete expenses',
 };
 
 /**
