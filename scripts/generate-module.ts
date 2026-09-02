@@ -115,6 +115,8 @@ interface Field {
   enumName?: string;
   isId: boolean;
   isAuto: boolean;
+  /** True for a field literally named `userId` — server-set from the caller, never client-writable. */
+  isOwner: boolean;
   optional: boolean;
 }
 
@@ -205,10 +207,14 @@ function extractFields(schemaText: string, modelName: string): ParsedModel | nul
     const isUpdatedAt = /@updatedAt\b/.test(attrs) || name === 'updatedAt';
     const isCreatedAtDefault = name === 'createdAt' && /@default\(now\(\)\)/.test(attrs);
     const isAuto = isId || isUpdatedAt || isCreatedAtDefault;
+    // A field literally named `userId` is server-set from the authenticated
+    // caller in every real module (category/expense/account) — never
+    // client-writable, never part of the create/update Zod schema.
+    const isOwner = name === 'userId';
 
     let field: Field;
     if (baseType === 'DateTime') {
-      field = { name, kind: 'date', tsType: 'Date', zodBase: 'z.date()', isId, isAuto, optional: isOptional };
+      field = { name, kind: 'date', tsType: 'Date', zodBase: 'z.date()', isId, isAuto, isOwner, optional: isOptional };
     } else if (enums.has(baseType)) {
       field = {
         name,
@@ -218,11 +224,21 @@ function extractFields(schemaText: string, modelName: string): ParsedModel | nul
         enumName: baseType,
         isId,
         isAuto,
+        isOwner,
         optional: isOptional,
       };
     } else {
       const { tsType, zodBase } = scalarType(baseType);
-      field = { name, kind: baseType === 'Decimal' ? 'decimal' : 'scalar', tsType, zodBase, isId, isAuto, optional: isOptional };
+      field = {
+        name,
+        kind: baseType === 'Decimal' ? 'decimal' : 'scalar',
+        tsType,
+        zodBase,
+        isId,
+        isAuto,
+        isOwner,
+        optional: isOptional,
+      };
     }
 
     fields.push(field);
@@ -238,7 +254,7 @@ function extractFields(schemaText: string, modelName: string): ParsedModel | nul
 function genericTaskFields(): ParsedModel {
   return {
     fields: [
-      { name: 'id', kind: 'scalar', tsType: 'string', zodBase: 'z.string()', isId: true, isAuto: true, optional: false },
+      { name: 'id', kind: 'scalar', tsType: 'string', zodBase: 'z.string()', isId: true, isAuto: true, isOwner: false, optional: false },
       {
         name: 'title',
         kind: 'scalar',
@@ -246,6 +262,7 @@ function genericTaskFields(): ParsedModel {
         zodBase: 'z.string().trim().min(1).max(200)',
         isId: false,
         isAuto: false,
+        isOwner: false,
         optional: false,
       },
       {
@@ -255,6 +272,7 @@ function genericTaskFields(): ParsedModel {
         zodBase: 'z.string().trim().max(2000)',
         isId: false,
         isAuto: false,
+        isOwner: false,
         optional: true,
       },
       {
@@ -265,11 +283,12 @@ function genericTaskFields(): ParsedModel {
         zodBase: 'z.enum(TaskStatusValues)',
         isId: false,
         isAuto: false,
+        isOwner: false,
         optional: false,
       },
-      { name: 'dueDate', kind: 'date', tsType: 'Date', zodBase: 'z.date()', isId: false, isAuto: false, optional: true },
-      { name: 'createdAt', kind: 'date', tsType: 'Date', zodBase: 'z.date()', isId: false, isAuto: true, optional: false },
-      { name: 'updatedAt', kind: 'date', tsType: 'Date', zodBase: 'z.date()', isId: false, isAuto: true, optional: false },
+      { name: 'dueDate', kind: 'date', tsType: 'Date', zodBase: 'z.date()', isId: false, isAuto: false, isOwner: false, optional: true },
+      { name: 'createdAt', kind: 'date', tsType: 'Date', zodBase: 'z.date()', isId: false, isAuto: true, isOwner: false, optional: false },
+      { name: 'updatedAt', kind: 'date', tsType: 'Date', zodBase: 'z.date()', isId: false, isAuto: true, isOwner: false, optional: false },
     ],
     enums: new Map([['TaskStatus', ['TODO', 'IN_PROGRESS', 'DONE']]]),
     fromRealSchema: false,
@@ -308,10 +327,14 @@ function generateModule({
   const SCREAM = screamingSnakeCase(Pascal);
 
   const nonId = fields.filter((f) => !f.isId);
-  const writable = nonId.filter((f) => !f.isAuto);
+  const ownerField = fields.find((f) => f.isOwner);
+  const hasOwner = !!ownerField;
+  const writable = nonId.filter((f) => !f.isAuto && !f.isOwner);
   const enumFields = nonId.filter((f) => f.kind === 'enum');
-  const stringFields = nonId.filter((f) => f.kind === 'scalar' && f.tsType === 'string');
-  const sortCandidates = nonId;
+  // userId is excluded — sorting/searching by an opaque owner FK is meaningless,
+  // and no real module (category/account) does it. See category/expense/account.
+  const stringFields = nonId.filter((f) => f.kind === 'scalar' && f.tsType === 'string' && !f.isOwner);
+  const sortCandidates = nonId.filter((f) => !f.isOwner);
   const defaultSort = sortCandidates.find((f) => f.name === 'createdAt')?.name ?? sortCandidates[0]?.name ?? 'id';
   const sortFields = [...new Set(sortCandidates.map((f) => f.name))];
 
@@ -373,9 +396,16 @@ function generateModule({
   const recordFields = fields.map(
     (f) => `  ${f.name}${f.optional ? '?' : ''}: ${recordFieldType(f)}${f.optional ? ' | null' : ''};`,
   );
-  const createFields = writable.map((f) => `  ${f.name}${f.optional ? '?' : ''}: ${inputFieldType(f)};`);
+  const createFields = [
+    ...writable.map((f) => `  ${f.name}${f.optional ? '?' : ''}: ${inputFieldType(f)};`),
+    ...(ownerField ? [`  ${ownerField.name}: string;`] : []),
+  ];
   const updateFields = writable.map((f) => `  ${f.name}?: ${inputFieldType(f)};`);
-  const filterFields = ['  search?: string;', ...enumFields.map((f) => `  ${f.name}?: ${f.enumName};`)];
+  const filterFields = [
+    '  search?: string;',
+    ...enumFields.map((f) => `  ${f.name}?: ${f.enumName};`),
+    ...(ownerField ? [`  ${ownerField.name}?: string;`] : []),
+  ];
 
   const hasDecimalField = fields.some((f) => f.kind === 'decimal');
   const decimalImportLine = hasDecimalField ? `import type { Prisma } from '@/generated/prisma/client';\n` : '';
@@ -417,15 +447,19 @@ ${filterFields.join('\n')}
   // ---- repository.ts -------------------------------------------------------
 
   const searchFieldNames = stringFields.map((f) => f.name);
-  const whereEnumLines = enumFields.map((f) => `        ${f.name}: filters.${f.name},`).join('\n');
+  const whereEqualityLines = [
+    ...enumFields.map((f) => `        ${f.name}: filters.${f.name},`),
+    ...(ownerField ? [`        ${ownerField.name}: filters.${ownerField.name},`] : []),
+  ].join('\n');
 
-  const createDataLines = writable
-    .map((f) =>
+  const createDataLines = [
+    ...writable.map((f) =>
       f.optional
         ? `          ...(data.${f.name} === undefined ? {} : { ${f.name}: data.${f.name} }),`
         : `          ${f.name}: data.${f.name},`,
-    )
-    .join('\n');
+    ),
+    ...(ownerField ? [`          ${ownerField.name}: data.${ownerField.name},`] : []),
+  ].join('\n');
 
   const updateDataLines = writable.map((f) => `          ${f.name}: data.${f.name},`).join('\n');
 
@@ -460,7 +494,7 @@ export class ${Pascal}Repository {
   private buildWhere(filters: ${Pascal}ListFilters) {
     return {
       ...omitUndefined({
-${whereEnumLines || '        // no equality filters — add one per field that needs it'}
+${whereEqualityLines || '        // no equality filters — add one per field that needs it'}
       }),
       ...buildSearchFilter(${SCREAM}_SEARCH_FIELDS, filters.search),
     };
@@ -623,15 +657,39 @@ export function map${Plural}ToResponse(${camel}s: ${Pascal}Record[]): ${Pascal}R
 `;
 
   // ---- service.ts -------------------------------------------------------
+  //
+  // When the model has a `userId` owner field (see `ownerField` above), every
+  // method threads an `actor: AuthenticatedUser` through: list/create scope to
+  // the caller, get/update/delete enforce "you can only touch your own
+  // records" with a ForbiddenError. This mirrors category/expense/account —
+  // see AGENTS.md and each of those service files.
 
-  const serviceTs = `import { NotFoundError } from '@/errors';
+  const errorsImportLine = hasOwner
+    ? `import { ForbiddenError, NotFoundError } from '@/errors';`
+    : `import { NotFoundError } from '@/errors';`;
+  const actorTypeImportLine = hasOwner
+    ? `import type { AuthenticatedUser } from '@/shared/types/authenticated-user.type';\n`
+    : '';
+  const actorParam = hasOwner ? ', actor: AuthenticatedUser' : '';
+  const listFilterBlockLines = [
+    ...enumFields.map((f) => `        ${f.name}: query.${f.name},`),
+    ...(ownerField ? [`        ${ownerField.name}: actor.id,`] : []),
+  ].join('\n');
+  const createOwnerLine = hasOwner ? `\n      ${ownerField!.name}: actor.id,` : '';
+
+  function ownershipCheck(camelVar: string, verb: string): string {
+    if (!hasOwner) return '';
+    return `\n\n    if (${camelVar}.${ownerField!.name} !== actor.id) {\n      throw new ForbiddenError('You can only ${verb} your own ${Plural.toLowerCase()}');\n    }`;
+  }
+
+  const serviceTs = `${errorsImportLine}
 import { buildPaginationMeta, getPagination } from '@/shared/utils/pagination.util';
 import type { PaginationMeta } from '@/shared/response/response-envelope';
 import type { ${Pascal}Repository } from '@/modules/${kebab}/${kebab}.repository';
 import { map${Plural}ToResponse, map${Pascal}ToResponse } from '@/modules/${kebab}/${kebab}.mapper';
 import type { ${Pascal}Response } from '@/modules/${kebab}/${kebab}.types';
 import type { Create${Pascal}Input, List${Plural}Query, Update${Pascal}Input } from '@/modules/${kebab}/${kebab}.schema';
-
+${actorTypeImportLine}
 export interface Paginated${Plural} {
   ${camel}s: ${Pascal}Response[];
   meta: PaginationMeta;
@@ -646,13 +704,13 @@ export interface Paginated${Plural} {
 export class ${Pascal}Service {
   constructor(private readonly ${camel}Repository: ${Pascal}Repository) {}
 
-  async list${Plural}(query: List${Plural}Query): Promise<Paginated${Plural}> {
+  async list${Plural}(query: List${Plural}Query${actorParam}): Promise<Paginated${Plural}> {
     const pagination = getPagination(query);
 
     const { items, total } = await this.${camel}Repository.findMany(
       {
         search: query.search,
-${enumFields.map((f) => `        ${f.name}: query.${f.name},`).join('\n')}
+${listFilterBlockLines}
       },
       pagination,
       query.sortBy,
@@ -665,23 +723,23 @@ ${enumFields.map((f) => `        ${f.name}: query.${f.name},`).join('\n')}
     };
   }
 
-  async get${Pascal}ById(id: string): Promise<${Pascal}Response> {
+  async get${Pascal}ById(id: string${actorParam}): Promise<${Pascal}Response> {
     const ${camel} = await this.${camel}Repository.findById(id);
-    if (!${camel}) throw new NotFoundError('${Pascal} not found');
+    if (!${camel}) throw new NotFoundError('${Pascal} not found');${ownershipCheck(camel, 'view')}
     return map${Pascal}ToResponse(${camel});
   }
 
-  async create${Pascal}(input: Create${Pascal}Input): Promise<${Pascal}Response> {
+  async create${Pascal}(input: Create${Pascal}Input${actorParam}): Promise<${Pascal}Response> {
     const ${camel} = await this.${camel}Repository.create({
-${writable.map((f) => `      ${f.name}: input.${f.name},`).join('\n') || '      // no writable fields'}
+${writable.map((f) => `      ${f.name}: input.${f.name},`).join('\n') || '      // no writable fields'}${createOwnerLine}
     });
 
     return map${Pascal}ToResponse(${camel});
   }
 
-  async update${Pascal}(id: string, input: Update${Pascal}Input): Promise<${Pascal}Response> {
+  async update${Pascal}(id: string, input: Update${Pascal}Input${actorParam}): Promise<${Pascal}Response> {
     const existing = await this.${camel}Repository.findById(id);
-    if (!existing) throw new NotFoundError('${Pascal} not found');
+    if (!existing) throw new NotFoundError('${Pascal} not found');${ownershipCheck('existing', 'modify')}
 
     const updated = await this.${camel}Repository.update(id, {
 ${writable.map((f) => `      ${f.name}: input.${f.name},`).join('\n') || '      // no writable fields'}
@@ -690,15 +748,21 @@ ${writable.map((f) => `      ${f.name}: input.${f.name},`).join('\n') || '      
     return map${Pascal}ToResponse(updated);
   }
 
-  async delete${Pascal}(id: string): Promise<void> {
+  async delete${Pascal}(id: string${actorParam}): Promise<void> {
     const existing = await this.${camel}Repository.findById(id);
-    if (!existing) throw new NotFoundError('${Pascal} not found');
+    if (!existing) throw new NotFoundError('${Pascal} not found');${ownershipCheck('existing', 'delete')}
     await this.${camel}Repository.delete(id);
   }
 }
 `;
 
   // ---- controller.ts -------------------------------------------------------
+
+  const authImportLine = hasOwner
+    ? `import { requireAuthenticatedUser } from '@/shared/utils/auth-context.util';\n`
+    : '';
+  const actorLine = hasOwner ? `    const actor = requireAuthenticatedUser(req);\n` : '';
+  const actorArg = hasOwner ? ', actor' : '';
 
   const controllerTs = `import type { Request, Response } from 'express';
 import { sendCreated, sendNoContent, sendPaginated, sendSuccess } from '@/shared/response/send-response.util';
@@ -709,38 +773,38 @@ import type {
   List${Plural}Query,
   Update${Pascal}Input,
 } from '@/modules/${kebab}/${kebab}.schema';
-
+${authImportLine}
 export class ${Pascal}Controller {
   constructor(private readonly ${camel}Service: ${Pascal}Service) {}
 
   list${Plural} = async (req: Request, res: Response): Promise<void> => {
     const query = req.query as unknown as List${Plural}Query;
-    const { ${camel}s, meta } = await this.${camel}Service.list${Plural}(query);
+${actorLine}    const { ${camel}s, meta } = await this.${camel}Service.list${Plural}(query${actorArg});
     sendPaginated(res, ${camel}s, meta);
   };
 
   get${Pascal} = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params as ${Pascal}IdParam;
-    const ${camel} = await this.${camel}Service.get${Pascal}ById(id);
+${actorLine}    const ${camel} = await this.${camel}Service.get${Pascal}ById(id${actorArg});
     sendSuccess(res, ${camel});
   };
 
   create${Pascal} = async (req: Request, res: Response): Promise<void> => {
     const input = req.body as Create${Pascal}Input;
-    const ${camel} = await this.${camel}Service.create${Pascal}(input);
+${actorLine}    const ${camel} = await this.${camel}Service.create${Pascal}(input${actorArg});
     sendCreated(res, ${camel}, '${Pascal} created successfully.');
   };
 
   update${Pascal} = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params as ${Pascal}IdParam;
     const input = req.body as Update${Pascal}Input;
-    const ${camel} = await this.${camel}Service.update${Pascal}(id, input);
+${actorLine}    const ${camel} = await this.${camel}Service.update${Pascal}(id, input${actorArg});
     sendSuccess(res, ${camel}, '${Pascal} updated successfully.');
   };
 
   delete${Pascal} = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params as ${Pascal}IdParam;
-    await this.${camel}Service.delete${Pascal}(id);
+${actorLine}    await this.${camel}Service.delete${Pascal}(id${actorArg});
     sendNoContent(res);
   };
 }
@@ -864,12 +928,40 @@ ${mapperTransformAssertions}${optionalNullTest}});
 
   const sampleInputFieldLines = writable.map((f) => `  ${f.name}: ${sampleValueExpr(f, enums, false)},`).join('\n');
 
+  // Owner-scoped modules: the actor's id is deliberately different from the
+  // default sample record's userId ('11111111-...'), so make${Pascal}Record()
+  // (no override) represents a record owned by someone else, and
+  // make${Pascal}Record({ userId: actor.id }) represents one the caller owns —
+  // mirrors category/expense/account.service.test.ts conventions.
+  const serviceTestErrorsImport = hasOwner ? `import { ForbiddenError, NotFoundError } from '@/errors';` : `import { NotFoundError } from '@/errors';`;
+  const serviceTestActorTypeImport = hasOwner
+    ? `import type { AuthenticatedUser } from '@/shared/types/authenticated-user.type';\n`
+    : '';
+  const actorConst = hasOwner
+    ? `\nconst actor: AuthenticatedUser = {
+  id: '22222222-2222-4222-8222-222222222222',
+  email: 'actor@example.com',
+  role: 'USER',
+};\n`
+    : '';
+  const actorTestArg = hasOwner ? ', actor' : '';
+  const ownedOverride = hasOwner ? `{ ${ownerField!.name}: actor.id }` : '';
+  const forbiddenCase = (call: string, notCalled?: string) =>
+    hasOwner
+      ? `
+    it('throws ForbiddenError when the record belongs to someone else', async () => {
+      repository.findById.mockResolvedValue(make${Pascal}Record());
+      await expect(${call}).rejects.toThrow(ForbiddenError);${notCalled ? `\n      expect(${notCalled}).not.toHaveBeenCalled();` : ''}
+    });
+`
+      : '';
+
   const serviceTestTs = `import { beforeEach, describe, expect, it, vi } from 'vitest';
-${decimalValueImportLine}import { NotFoundError } from '@/errors';
+${decimalValueImportLine}${serviceTestErrorsImport}
 import { ${Pascal}Service } from '@/modules/${kebab}/${kebab}.service';
 import type { ${Pascal}Record } from '@/modules/${kebab}/${kebab}.types';
 import type { Create${Pascal}Input } from '@/modules/${kebab}/${kebab}.schema';
-
+${serviceTestActorTypeImport}
 /**
  * Generated by npm run generate:module. Mocks only what the service calls —
  * see docs/testing.md. Extend with the module's actual business rules once
@@ -892,7 +984,7 @@ ${mapperRecordFieldLines}
     ...overrides,
   };
 }
-
+${actorConst}
 const sampleInput: Create${Pascal}Input = {
 ${sampleInputFieldLines || '  // no writable fields'}
 };
@@ -909,35 +1001,35 @@ describe('${Pascal}Service', () => {
   describe('get${Pascal}ById', () => {
     it('throws NotFoundError when the record does not exist', async () => {
       repository.findById.mockResolvedValue(null);
-      await expect(service.get${Pascal}ById('missing-id')).rejects.toThrow(NotFoundError);
+      await expect(service.get${Pascal}ById('missing-id'${actorTestArg})).rejects.toThrow(NotFoundError);
     });
-
+${forbiddenCase(`service.get${Pascal}ById('11111111-1111-4111-8111-111111111111'${actorTestArg})`)}
     it('returns the mapped record when found', async () => {
-      repository.findById.mockResolvedValue(make${Pascal}Record());
-      const result = await service.get${Pascal}ById('11111111-1111-4111-8111-111111111111');
+      repository.findById.mockResolvedValue(make${Pascal}Record(${ownedOverride}));
+      const result = await service.get${Pascal}ById('11111111-1111-4111-8111-111111111111'${actorTestArg});
       expect(result.id).toBe('11111111-1111-4111-8111-111111111111');
     });
   });
 
   describe('create${Pascal}', () => {
-    it('writes exactly the whitelisted fields', async () => {
-      repository.create.mockResolvedValue(make${Pascal}Record());
-      await service.create${Pascal}(sampleInput);
-      expect(repository.create).toHaveBeenCalledWith(sampleInput);
+    it('writes exactly the whitelisted fields${hasOwner ? ' plus the caller as owner' : ''}', async () => {
+      repository.create.mockResolvedValue(make${Pascal}Record(${ownedOverride}));
+      await service.create${Pascal}(sampleInput${actorTestArg});
+      expect(repository.create).toHaveBeenCalledWith(${hasOwner ? `{ ...sampleInput, ${ownerField!.name}: actor.id }` : 'sampleInput'});
     });
   });
 
   describe('update${Pascal}', () => {
     it('throws NotFoundError when the record does not exist', async () => {
       repository.findById.mockResolvedValue(null);
-      await expect(service.update${Pascal}('missing-id', sampleInput)).rejects.toThrow(NotFoundError);
+      await expect(service.update${Pascal}('missing-id', sampleInput${actorTestArg})).rejects.toThrow(NotFoundError);
       expect(repository.update).not.toHaveBeenCalled();
     });
-
+${forbiddenCase(`service.update${Pascal}('11111111-1111-4111-8111-111111111111', sampleInput${actorTestArg})`, 'repository.update')}
     it('writes exactly the whitelisted fields when the record exists', async () => {
-      repository.findById.mockResolvedValue(make${Pascal}Record());
-      repository.update.mockResolvedValue(make${Pascal}Record());
-      await service.update${Pascal}('11111111-1111-4111-8111-111111111111', sampleInput);
+      repository.findById.mockResolvedValue(make${Pascal}Record(${ownedOverride}));
+      repository.update.mockResolvedValue(make${Pascal}Record(${ownedOverride}));
+      await service.update${Pascal}('11111111-1111-4111-8111-111111111111', sampleInput${actorTestArg});
       expect(repository.update).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111', sampleInput);
     });
   });
@@ -945,17 +1037,21 @@ describe('${Pascal}Service', () => {
   describe('delete${Pascal}', () => {
     it('throws NotFoundError when the record does not exist', async () => {
       repository.findById.mockResolvedValue(null);
-      await expect(service.delete${Pascal}('missing-id')).rejects.toThrow(NotFoundError);
+      await expect(service.delete${Pascal}('missing-id'${actorTestArg})).rejects.toThrow(NotFoundError);
       expect(repository.delete).not.toHaveBeenCalled();
     });
-  });
+${forbiddenCase(`service.delete${Pascal}('11111111-1111-4111-8111-111111111111'${actorTestArg})`, 'repository.delete')}  });
 
   describe('list${Plural}', () => {
     it('returns paginated items with meta', async () => {
-      repository.findMany.mockResolvedValue({ items: [make${Pascal}Record()], total: 1 });
-      const result = await service.list${Plural}({ page: 1, pageSize: 20, sortBy: '${defaultSort}', sortOrder: 'desc' });
+      repository.findMany.mockResolvedValue({ items: [make${Pascal}Record(${ownedOverride})], total: 1 });
+      const result = await service.list${Plural}({ page: 1, pageSize: 20, sortBy: '${defaultSort}', sortOrder: 'desc' }${actorTestArg});
       expect(result.${camel}s).toHaveLength(1);
-      expect(result.meta.total).toBe(1);
+      expect(result.meta.total).toBe(1);${
+        hasOwner
+          ? `\n      expect(repository.findMany).toHaveBeenCalledWith(\n        expect.objectContaining({ ${ownerField!.name}: actor.id }),\n        expect.anything(),\n        '${defaultSort}',\n        'desc',\n      );`
+          : ''
+      }
     });
   });
 });
@@ -973,6 +1069,44 @@ describe('${Pascal}Service', () => {
   const validPatchBody = writable[0]
     ? `{ ${writable[0].name}: ${expectedResponseValueExpr(writable[0], enums)} }`
     : '{}';
+
+  // Foreign keys besides the owner field itself (e.g. Expense's categoryId /
+  // accountId) point at rows this generator has no way to seed, so a generic
+  // create in an integration test would just fail its FK constraint. Only
+  // attempt the ownership round-trip below when there are none.
+  // `writable` already excludes the owner field itself (see above), so this is
+  // any other FK-shaped column — categoryId/accountId on Expense, e.g.
+  const otherForeignKeys = writable.filter((f) => /Id$/.test(f.name));
+  const canGenerateOwnershipTest = hasOwner && otherForeignKeys.length === 0;
+  const sampleCreateBody = `{ ${writable.map((f) => `${f.name}: ${sampleValueExpr(f, enums, false)}`).join(', ')} }`;
+
+  const ownershipTestBlock = canGenerateOwnershipTest
+    ? `
+describe('${Pascal} routes — ownership', () => {
+  it('prevents a different caller from accessing the record', async () => {
+    const owner = await authenticatedRequest({ role: ROLES.SUPER_ADMIN });
+    const intruder = await authenticatedRequest({ role: ROLES.SUPER_ADMIN });
+
+    const created = await request(app)
+      .post(${listConst})
+      .set(owner.headers)
+      .send(${sampleCreateBody})
+      .expect(201);
+    const id = created.body.data.id;
+    const item = \`\${${listConst}}/\${id}\`;
+
+    await request(app).get(item).set(owner.headers).expect(200);
+    await request(app).get(item).set(intruder.headers).expect(403);
+    await request(app).patch(item).set(intruder.headers).send(${validPatchBody}).expect(403);
+    await request(app).delete(item).set(intruder.headers).expect(403);
+  });
+});
+`
+    : '';
+
+  const ownershipTodoLine = hasOwner && !canGenerateOwnershipTest
+    ? `\n  it.todo('ownership enforcement — needs seed data for ${otherForeignKeys.map((f) => f.name).join(', ')}, see docs/adding-a-module.md Step 12');`
+    : '';
 
   const integrationTestTs = `import request from 'supertest';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
@@ -1054,9 +1188,9 @@ describe('${Pascal} routes — auth and validation', () => {
   });
 
   it.todo('full create/update/delete happy path — needs foreign-key seed data for this module (see docs/adding-a-module.md Step 12)');
-  it.todo('model-specific business rules, if any');
+  it.todo('model-specific business rules, if any');${ownershipTodoLine}
 });
-`;
+${ownershipTestBlock}`;
 
   return {
     Pascal,
