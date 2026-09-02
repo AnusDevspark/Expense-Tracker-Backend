@@ -15,6 +15,9 @@ export interface ExpenseResponse {
   amount: number;
   date: string;
   categoryId: string;
+  categoryName: string;
+  accountId: string;
+  accountName: string;
   userId: string;
   createdAt: string;
   updatedAt: string;
@@ -28,6 +31,15 @@ export interface ExpenseRecord {
   amount: Prisma.Decimal;
   date: Date;
   categoryId: string;
+  category: {
+    id: string;
+    name: string;
+  };
+  accountId: string;
+  account: {
+    id: string;
+    name: string;
+  };
   userId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -40,6 +52,7 @@ export interface CreateExpenseData {
   amount: number;
   date: Date;
   categoryId: string;
+  accountId: string;
   userId: string;
 }
 
@@ -50,10 +63,13 @@ export interface UpdateExpenseData {
   amount?: number;
   date?: Date;
   categoryId?: string;
+  accountId?: string;
 }
 
 /** Whitelisted filters. */
 export interface ExpenseListFilters {
   search?: string;
+  categoryId?: string;
+  accountId?: string;
   userId?: string;
 }

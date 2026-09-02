@@ -13,7 +13,7 @@ function makeAccountRecord(overrides: Partial<AccountRecord> = {}): AccountRecor
   return {
     id: '11111111-1111-4111-8111-111111111111',
     name: 'Sample name',
-    initalBalance: new Prisma.Decimal('123.45'),
+    initialBalance: new Prisma.Decimal('123.45'),
     balance: new Prisma.Decimal('123.45'),
     userId: '11111111-1111-4111-8111-111111111111',
     createdAt: new Date('2026-01-02T03:04:05.678Z'),
@@ -28,16 +28,16 @@ describe('mapAccountToResponse', () => {
     'balance',
     'createdAt',
     'id',
-    'initalBalance',
+    'initialBalance',
     'name',
     'updatedAt',
     'userId',
     ]);
   });
 
-  it('maps initalBalance to a number', () => {
+  it('maps initialBalance to a number', () => {
     const result = mapAccountToResponse(makeAccountRecord());
-    expect(result.initalBalance).toBe(123.45);
+    expect(result.initialBalance).toBe(123.45);
   });
 
   it('maps balance to a number', () => {

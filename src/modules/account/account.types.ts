@@ -11,7 +11,7 @@ import type { Prisma } from '@/generated/prisma/client';
 export interface AccountResponse {
   id: string;
   name: string;
-  initalBalance: number;
+  initialBalance: number;
   balance: number;
   userId: string;
   createdAt: string;
@@ -22,7 +22,7 @@ export interface AccountResponse {
 export interface AccountRecord {
   id: string;
   name: string;
-  initalBalance: Prisma.Decimal;
+  initialBalance: Prisma.Decimal;
   balance: Prisma.Decimal;
   userId: string;
   createdAt: Date;
@@ -32,7 +32,7 @@ export interface AccountRecord {
 /** Whitelisted create fields, built by the service. */
 export interface CreateAccountData {
   name: string;
-  initalBalance: number;
+  initialBalance: number;
   balance: number;
   userId: string;
 }
@@ -40,7 +40,7 @@ export interface CreateAccountData {
 /** Whitelisted update fields. */
 export interface UpdateAccountData {
   name?: string;
-  initalBalance?: number;
+  initialBalance?: number;
   balance?: number;
 }
 

@@ -107,7 +107,7 @@ const expenseResponseSchema = z.object({
 const accountResponseSchema = z.object({
   id: z.uuid(),
   name: z.string(),
-  initalBalance: z.number(),
+  initialBalance: z.number(),
   balance: z.number(),
   userId: z.uuid(),
   createdAt: z.string(),

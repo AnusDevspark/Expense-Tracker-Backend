@@ -42,8 +42,18 @@ export class ExpenseRepository {
     };
   }
 
+  private static readonly withNames = {
+    category: { select: { id: true, name: true } },
+    account: { select: { id: true, name: true } },
+  } as const;
+
   async findById(id: string, tx?: PrismaTransactionClient): Promise<ExpenseRecord | null> {
-    return withPrismaErrors('Expense', () => this.client(tx).expense.findUnique({ where: { id } }));
+    return withPrismaErrors('Expense', () =>
+      this.client(tx).expense.findUnique({
+        where: { id },
+        include: ExpenseRepository.withNames,
+      }),
+    );
   }
 
   async findMany(
@@ -62,6 +72,7 @@ export class ExpenseRepository {
           orderBy,
           skip: pagination.skip,
           take: pagination.take,
+          include: ExpenseRepository.withNames,
         }),
         this.prisma.expense.count({ where }),
       ]);
@@ -71,7 +82,9 @@ export class ExpenseRepository {
   }
 
   async count(filters: ExpenseListFilters = {}): Promise<number> {
-    return withPrismaErrors('Expense', () => this.prisma.expense.count({ where: this.buildWhere(filters) }));
+    return withPrismaErrors('Expense', () =>
+      this.prisma.expense.count({ where: this.buildWhere(filters) }),
+    );
   }
 
   async create(data: CreateExpenseData, tx?: PrismaTransactionClient): Promise<ExpenseRecord> {
@@ -83,13 +96,19 @@ export class ExpenseRepository {
           amount: data.amount,
           date: data.date,
           categoryId: data.categoryId,
+          accountId: data.accountId,
           userId: data.userId,
         },
+        include: ExpenseRepository.withNames,
       }),
     );
   }
 
-  async update(id: string, data: UpdateExpenseData, tx?: PrismaTransactionClient): Promise<ExpenseRecord> {
+  async update(
+    id: string,
+    data: UpdateExpenseData,
+    tx?: PrismaTransactionClient,
+  ): Promise<ExpenseRecord> {
     return withPrismaErrors('Expense', () =>
       this.client(tx).expense.update({
         where: { id },
@@ -99,7 +118,9 @@ export class ExpenseRepository {
           amount: data.amount,
           date: data.date,
           categoryId: data.categoryId,
+          accountId: data.accountId,
         }),
+        include: ExpenseRepository.withNames,
       }),
     );
   }

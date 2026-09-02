@@ -18,14 +18,14 @@ export const listAccountsQuerySchema = paginationSchema
 
 export const createAccountSchema = z.object({
   name: z.string(),
-  initalBalance: z.number().default(0),
+  initialBalance: z.number().default(0),
   balance: z.number(),
 });
 
 export const updateAccountSchema = z
   .object({
     name: z.string().optional(),
-    initalBalance: z.number().optional(),
+    initialBalance: z.number().optional(),
     balance: z.number().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {

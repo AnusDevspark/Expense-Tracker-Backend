@@ -8,7 +8,7 @@ export function mapAccountToResponse(account: AccountRecord): AccountResponse {
   return {
     id: account.id,
     name: account.name,
-    initalBalance: account.initalBalance.toNumber(),
+    initialBalance: account.initialBalance.toNumber(),
     balance: account.balance.toNumber(),
     userId: account.userId,
     createdAt: account.createdAt.toISOString(),

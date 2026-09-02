@@ -26,6 +26,7 @@ export const createExpenseSchema = z.object({
   amount: z.number(),
   date: isoDateTimeSchema,
   categoryId: z.string(),
+  accountId: z.string(),
 });
 
 export const updateExpenseSchema = z
@@ -35,6 +36,7 @@ export const updateExpenseSchema = z
     amount: z.number().optional(),
     date: isoDateTimeSchema.optional(),
     categoryId: z.string().optional(),
+    accountId: z.string().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: 'at least one field must be provided',

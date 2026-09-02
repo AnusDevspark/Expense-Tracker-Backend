@@ -63,6 +63,7 @@ export class ExpenseService {
       amount: input.amount,
       date: input.date,
       categoryId: input.categoryId,
+      accountId: input.accountId,
       userId: actor.id,
     });
 
@@ -83,6 +84,7 @@ export class ExpenseService {
       amount: input.amount,
       date: input.date,
       categoryId: input.categoryId,
+      accountId: input.accountId,
     });
 
     return mapExpenseToResponse(updated);

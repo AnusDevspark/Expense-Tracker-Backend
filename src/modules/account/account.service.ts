@@ -64,7 +64,7 @@ export class AccountService {
   ): Promise<AccountResponse> {
     const account = await this.accountRepository.create({
       name: input.name,
-      initalBalance: input.initalBalance,
+      initialBalance: input.initialBalance,
       balance: input.balance,
       userId: actor.id,
     });
@@ -86,7 +86,7 @@ export class AccountService {
 
     const updated = await this.accountRepository.update(id, {
       name: input.name,
-      initalBalance: input.initalBalance,
+      initialBalance: input.initialBalance,
       balance: input.balance,
     });
 

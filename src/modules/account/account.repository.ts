@@ -13,7 +13,7 @@ import type {
 /** Sortable fields, whitelisted. Also consumed by account.schema.ts. */
 export const ACCOUNT_SORT_FIELDS = [
   'name',
-  'initalBalance',
+  'initialBalance',
   'balance',
   'createdAt',
   'updatedAt',
@@ -78,7 +78,7 @@ export class AccountRepository {
       this.client(tx).account.create({
         data: {
           name: data.name,
-          initalBalance: data.initalBalance,
+          initialBalance: data.initialBalance,
           balance: data.balance,
           userId: data.userId,
         },
@@ -96,7 +96,7 @@ export class AccountRepository {
         where: { id },
         data: omitUndefined({
           name: data.name,
-          initalBalance: data.initalBalance,
+          initialBalance: data.initialBalance,
           balance: data.balance,
         }),
       }),
