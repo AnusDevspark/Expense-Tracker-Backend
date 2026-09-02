@@ -48,7 +48,6 @@ model User {
   categories Category[]
   expenses   Expense[]
   accounts   Account[]
-  todos      Todo[]
 
   // email is already indexed by @unique — that index serves the login lookup.
   @@index([roleId]) // permission resolution joins Role on every authorize call
