@@ -103,6 +103,19 @@ export class AccountRepository {
     );
   }
 
+  async adjustBalance(id: string, amount: number, tx?: PrismaTransactionClient): Promise<AccountRecord> {
+    return withPrismaErrors('Account', () =>
+      this.client(tx).account.update({
+        where: { id },
+        data: {
+          balance: {
+            increment: amount,
+          },
+        },
+      }),
+    );
+  }
+
   async delete(id: string, tx?: PrismaTransactionClient): Promise<void> {
     await withPrismaErrors('Account', () => this.client(tx).account.delete({ where: { id } }));
   }

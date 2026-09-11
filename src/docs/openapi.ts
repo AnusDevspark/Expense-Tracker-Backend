@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { createDocument } from 'zod-openapi';
-import { API_BASE_PATH, SERVICE_NAME, SERVICE_VERSION } from '@/config/constants';
+import { API_BASE_PATH, DOCS_PATH, SERVICE_NAME, SERVICE_VERSION } from '@/config/constants';
 import {
   changePasswordSchema,
   loginSchema,
@@ -70,6 +70,32 @@ const paginationMetaSchema = z.object({
   hasPreviousPage: z.boolean(),
 });
 
+const serviceMetadataResponseSchema = z.object({
+  service: z.string(),
+  version: z.string(),
+  environment: z.string(),
+  documentation: z.literal(DOCS_PATH),
+});
+
+const healthLiveResponseSchema = z.object({
+  status: z.literal('ok'),
+  uptime: z.number().int(),
+});
+
+const healthReadyResponseSchema = z.object({
+  status: z.enum(['ready', 'not_ready']),
+  checks: z.object({ database: z.enum(['up', 'down']) }),
+});
+
+const healthSummaryResponseSchema = healthReadyResponseSchema.extend({
+  status: z.enum(['healthy', 'degraded']),
+  service: z.string(),
+  version: z.string(),
+  environment: z.string(),
+  uptime: z.number().int(),
+  timestamp: z.string(),
+});
+
 const userResponseSchema = z.object({
   id: z.uuid(),
   firstName: z.string(),
@@ -99,6 +125,9 @@ const expenseResponseSchema = z.object({
   amount: z.number(),
   date: z.string(),
   categoryId: z.uuid(),
+  categoryName: z.string(),
+  accountId: z.uuid(),
+  accountName: z.string(),
   userId: z.uuid(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -141,6 +170,15 @@ function successOf<T extends z.ZodType>(dataSchema: T) {
   return z.object({
     success: z.literal(true),
     message: z.string().optional(),
+    data: dataSchema,
+  });
+}
+
+function healthOf<T extends z.ZodType>(dataSchema: T) {
+  return z.object({
+    success: z.boolean(),
+    message: z.string().optional(),
+    code: z.string().optional(),
     data: dataSchema,
   });
 }
@@ -219,6 +257,7 @@ export function buildOpenApiDocument(): ReturnType<typeof createDocument> {
     },
     servers: [{ url: API_BASE_PATH, description: 'Current version' }],
     tags: [
+      { name: 'System', description: 'Service metadata and health probes' },
       { name: 'Auth', description: 'Registration, login, token lifecycle' },
       { name: 'Users', description: 'User administration (permission gated)' },
       { name: 'Categories', description: 'Categories (permission gated)' },
@@ -237,6 +276,87 @@ export function buildOpenApiDocument(): ReturnType<typeof createDocument> {
     },
 
     paths: {
+      // -------------------------------------------------------------- System
+      '/': {
+        get: {
+          tags: ['System'],
+          summary: 'Service metadata',
+          description: 'Returns public metadata for the current API version.',
+          responses: {
+            '200': {
+              description: 'Service metadata',
+              content: {
+                'application/json': { schema: successOf(serviceMetadataResponseSchema) },
+              },
+            },
+            ...commonErrors,
+          },
+        },
+      },
+
+      '/health': {
+        servers: [{ url: '/', description: 'Root' }],
+        get: {
+          tags: ['System'],
+          summary: 'Health summary',
+          description: 'Human-friendly summary of liveness and readiness.',
+          responses: {
+            '200': {
+              description: 'Service is healthy',
+              content: {
+                'application/json': { schema: healthOf(healthSummaryResponseSchema) },
+              },
+            },
+            '503': {
+              description: 'Service is degraded',
+              content: {
+                'application/json': { schema: healthOf(healthSummaryResponseSchema) },
+              },
+            },
+          },
+        },
+      },
+
+      '/health/live': {
+        servers: [{ url: '/', description: 'Root' }],
+        get: {
+          tags: ['System'],
+          summary: 'Liveness probe',
+          description: 'Reports whether the process is alive without checking external dependencies.',
+          responses: {
+            '200': {
+              description: 'Process is alive',
+              content: {
+                'application/json': { schema: successOf(healthLiveResponseSchema) },
+              },
+            },
+          },
+        },
+      },
+
+      '/health/ready': {
+        servers: [{ url: '/', description: 'Root' }],
+        get: {
+          tags: ['System'],
+          summary: 'Readiness probe',
+          description: 'Reports whether the service can currently handle traffic.',
+          responses: {
+            '200': {
+              description: 'Service is ready',
+              content: {
+                'application/json': { schema: healthOf(healthReadyResponseSchema) },
+              },
+            },
+            '503': {
+              description: 'Service is not ready',
+              content: {
+                'application/json': { schema: healthOf(healthReadyResponseSchema) },
+              },
+            },
+          },
+        },
+      },
+
       // ---------------------------------------------------------------- Auth
       '/auth/register': {
         post: {
@@ -526,6 +646,7 @@ export function buildOpenApiDocument(): ReturnType<typeof createDocument> {
               description: 'Expense created',
               content: { 'application/json': { schema: successOf(expenseResponseSchema) } },
             },
+            ...notFoundResponse,
             ...conflictResponse,
             ...commonErrors,
           },

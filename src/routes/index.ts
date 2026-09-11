@@ -76,7 +76,7 @@ export function createApiRouter(prisma: PrismaClientInstance): Router {
     emailService,
   );
   const categoryService = new CategoryService(categoryRepository);
-  const expenseService = new ExpenseService(expenseRepository);
+  const expenseService = new ExpenseService(prisma, expenseRepository, accountRepository);
   const accountService = new AccountService(accountRepository);
 
   // --- Controllers (HTTP) ---------------------------------------------------
