@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Prisma } from '@/generated/prisma/client';
+import { CategoryType } from '@/generated/prisma/enums';
 import { mapExpenseToResponse } from '@/modules/expense/expense.mapper';
 import type { ExpenseRecord } from '@/modules/expense/expense.types';
 
@@ -17,6 +18,16 @@ function makeExpenseRecord(overrides: Partial<ExpenseRecord> = {}): ExpenseRecor
     amount: new Prisma.Decimal('123.45'),
     date: new Date('2026-01-02T03:04:05.678Z'),
     categoryId: '11111111-1111-4111-8111-111111111111',
+    category: {
+      id: '11111111-1111-4111-8111-111111111111',
+      name: 'Groceries',
+      type: CategoryType.EXPENSE,
+    },
+    accountId: '22222222-2222-4222-8222-222222222222',
+    account: {
+      id: '22222222-2222-4222-8222-222222222222',
+      name: 'Cash',
+    },
     userId: '11111111-1111-4111-8111-111111111111',
     createdAt: new Date('2026-01-02T03:04:05.678Z'),
     updatedAt: new Date('2026-01-02T03:04:05.678Z'),
@@ -27,8 +38,12 @@ function makeExpenseRecord(overrides: Partial<ExpenseRecord> = {}): ExpenseRecor
 describe('mapExpenseToResponse', () => {
   it('emits exactly the documented fields', () => {
     expect(Object.keys(mapExpenseToResponse(makeExpenseRecord())).sort()).toEqual([
+    'accountId',
+    'accountName',
     'amount',
     'categoryId',
+    'categoryName',
+    'categoryType',
     'createdAt',
     'date',
     'description',

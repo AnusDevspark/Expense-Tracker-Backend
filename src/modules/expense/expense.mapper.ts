@@ -13,6 +13,7 @@ export function mapExpenseToResponse(expense: ExpenseRecord): ExpenseResponse {
     date: expense.date.toISOString(),
     categoryId: expense.categoryId,
     categoryName: expense.category.name,
+    categoryType: expense.category.type,
     accountId: expense.accountId,
     accountName: expense.account.name,
     userId: expense.userId,

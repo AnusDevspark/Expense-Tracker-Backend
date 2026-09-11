@@ -17,7 +17,8 @@ export const listExpensesQuerySchema = paginationSchema
   .extend(sortingSchema(EXPENSE_SORT_FIELDS, 'createdAt').shape)
   .extend(searchSchema.shape)
   .extend({
-    // add per-field filters here as the model grows
+    categoryId: z.uuid().optional(),
+    accountId: z.uuid().optional(),
   });
 
 export const createExpenseSchema = z.object({

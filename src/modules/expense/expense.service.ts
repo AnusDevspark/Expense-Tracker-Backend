@@ -7,6 +7,8 @@ import { mapExpensesToResponse, mapExpenseToResponse } from '@/modules/expense/e
 import type { ExpenseResponse } from '@/modules/expense/expense.types';
 import type { CreateExpenseInput, ListExpensesQuery, UpdateExpenseInput } from '@/modules/expense/expense.schema';
 import type { AccountRepository } from '@/modules/account/account.repository';
+import type { CategoryRepository } from '@/modules/category/category.repository';
+import type { CategoryRecord } from '@/modules/category/category.types';
 import type { AuthenticatedUser } from '@/shared/types/authenticated-user.type';
 
 export interface PaginatedExpenses {
@@ -30,6 +32,7 @@ export class ExpenseService {
     private readonly prisma: PrismaClientInstance,
     private readonly expenseRepository: ExpenseRepository,
     private readonly accountRepository: AccountRepository,
+    private readonly categoryRepository: CategoryRepository,
   ) {}
 
   async listExpenses(query: ListExpensesQuery, actor: AuthenticatedUser): Promise<PaginatedExpenses> {
@@ -37,6 +40,8 @@ export class ExpenseService {
 
     const { items, total } = await this.expenseRepository.findMany(
       {
+        accountId: query.accountId,
+        categoryId: query.categoryId,
         search: query.search,
         userId: actor.id,
       },
@@ -69,6 +74,12 @@ export class ExpenseService {
       throw new ForbiddenError('You can only spend from your own accounts');
     }
 
+    const category = await this.categoryRepository.findById(input.categoryId);
+    if (!category) throw new NotFoundError('Category not found');
+    if (category.userId !== actor.id) {
+      throw new ForbiddenError('You can only use your own categories');
+    }
+
     const expense = await this.prisma.$transaction(async (tx) => {
       const created = await this.expenseRepository.create(
         {
@@ -83,7 +94,10 @@ export class ExpenseService {
         tx,
       );
 
-      await this.accountRepository.adjustBalance(input.accountId, -input.amount, tx);
+      const balanceDelta = getBalanceDelta(input.amount, category);
+      if (balanceDelta !== 0) {
+        await this.accountRepository.adjustBalance(input.accountId, balanceDelta, tx);
+      }
 
       return created;
     });
@@ -100,6 +114,8 @@ export class ExpenseService {
     }
 
     const nextAccountId = input.accountId ?? existing.accountId;
+    let nextCategory: CategoryRecord | null | undefined;
+
     if (input.accountId && input.accountId !== existing.accountId) {
       const nextAccount = await this.accountRepository.findById(input.accountId);
       if (!nextAccount) throw new NotFoundError('Account not found');
@@ -108,9 +124,19 @@ export class ExpenseService {
       }
     }
 
+    if (input.categoryId && input.categoryId !== existing.categoryId) {
+      nextCategory = await this.categoryRepository.findById(input.categoryId);
+      if (!nextCategory) throw new NotFoundError('Category not found');
+      if (nextCategory.userId !== actor.id) {
+        throw new ForbiddenError('You can only use your own categories');
+      }
+    }
+
     const previousAmount = existing.amount.toNumber();
     const nextAmount = input.amount ?? previousAmount;
-    const balanceChanged = nextAccountId !== existing.accountId || nextAmount !== previousAmount;
+    const previousDelta = getBalanceDelta(previousAmount, existing.category);
+    const nextDelta = getBalanceDelta(nextAmount, nextCategory ?? existing.category);
+    const balanceChanged = nextAccountId !== existing.accountId || nextDelta !== previousDelta;
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const result = await this.expenseRepository.update(
@@ -127,8 +153,12 @@ export class ExpenseService {
       );
 
       if (balanceChanged) {
-        await this.accountRepository.adjustBalance(existing.accountId, previousAmount, tx);
-        await this.accountRepository.adjustBalance(nextAccountId, -nextAmount, tx);
+        if (previousDelta !== 0) {
+          await this.accountRepository.adjustBalance(existing.accountId, -previousDelta, tx);
+        }
+        if (nextDelta !== 0) {
+          await this.accountRepository.adjustBalance(nextAccountId, nextDelta, tx);
+        }
       }
 
       return result;
@@ -147,8 +177,17 @@ export class ExpenseService {
 
     await this.prisma.$transaction(async (tx) => {
       await this.expenseRepository.delete(id, tx);
-      await this.accountRepository.adjustBalance(existing.accountId, existing.amount.toNumber(), tx);
+      const balanceDelta = getBalanceDelta(existing.amount.toNumber(), existing.category);
+      if (balanceDelta !== 0) {
+        await this.accountRepository.adjustBalance(existing.accountId, -balanceDelta, tx);
+      }
     });
   }
+}
+
+function getBalanceDelta(amount: number, category: Pick<CategoryRecord, 'type'>): number {
+  if (category.type === 'INCOME') return amount;
+  if (category.type === 'EXPENSE') return -amount;
+  return 0;
 }
  

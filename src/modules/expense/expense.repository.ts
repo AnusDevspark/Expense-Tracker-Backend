@@ -24,7 +24,7 @@ export const EXPENSE_SORT_FIELDS = [
 
 export type ExpenseSortField = (typeof EXPENSE_SORT_FIELDS)[number];
 
-const EXPENSE_SEARCH_FIELDS = ['title', 'description', 'categoryId'] as const;
+const EXPENSE_SEARCH_FIELDS = ['title', 'description'] as const;
 
 export class ExpenseRepository {
   constructor(private readonly prisma: PrismaClientInstance) {}
@@ -36,6 +36,8 @@ export class ExpenseRepository {
   private buildWhere(filters: ExpenseListFilters) {
     return {
       ...omitUndefined({
+        accountId: filters.accountId,
+        categoryId: filters.categoryId,
         userId: filters.userId,
       }),
       ...buildSearchFilter(EXPENSE_SEARCH_FIELDS, filters.search),
@@ -43,7 +45,7 @@ export class ExpenseRepository {
   }
 
   private static readonly withNames = {
-    category: { select: { id: true, name: true } },
+    category: { select: { id: true, name: true, type: true } },
     account: { select: { id: true, name: true } },
   } as const;
 

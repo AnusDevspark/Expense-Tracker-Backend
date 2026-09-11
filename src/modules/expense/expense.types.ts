@@ -1,4 +1,5 @@
 import type { Prisma } from '@/generated/prisma/client';
+import type { CategoryType } from '@/generated/prisma/enums';
 
 /**
  * Types the expense module exposes to the rest of the application.
@@ -16,6 +17,7 @@ export interface ExpenseResponse {
   date: string;
   categoryId: string;
   categoryName: string;
+  categoryType: CategoryType;
   accountId: string;
   accountName: string;
   userId: string;
@@ -34,6 +36,7 @@ export interface ExpenseRecord {
   category: {
     id: string;
     name: string;
+    type: CategoryType;
   };
   accountId: string;
   account: {

@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '@/generated/prisma/client';
+import { CategoryType } from '@/generated/prisma/enums';
 import { ForbiddenError, NotFoundError } from '@/errors';
 import { ExpenseService } from '@/modules/expense/expense.service';
 import type { ExpenseRecord } from '@/modules/expense/expense.types';
 import type { AccountRecord } from '@/modules/account/account.types';
+import type { CategoryRecord } from '@/modules/category/category.types';
 import type { CreateExpenseInput } from '@/modules/expense/expense.schema';
 import type { AuthenticatedUser } from '@/shared/types/authenticated-user.type';
 
@@ -44,6 +46,12 @@ function createMockAccountRepository() {
   };
 }
 
+function createMockCategoryRepository() {
+  return {
+    findById: vi.fn(),
+  };
+}
+
 function makeExpenseRecord(overrides: Partial<ExpenseRecord> = {}): ExpenseRecord {
   return {
     id: '11111111-1111-4111-8111-111111111111',
@@ -52,9 +60,26 @@ function makeExpenseRecord(overrides: Partial<ExpenseRecord> = {}): ExpenseRecor
     amount: new Prisma.Decimal('123.45'),
     date: new Date('2026-01-02T03:04:05.678Z'),
     categoryId: '11111111-1111-4111-8111-111111111111',
-    category: { id: '11111111-1111-4111-8111-111111111111', name: 'Groceries' },
+    category: {
+      id: '11111111-1111-4111-8111-111111111111',
+      name: 'Groceries',
+      type: CategoryType.EXPENSE,
+    },
     accountId: '44444444-4444-4444-8444-444444444444',
     account: { id: '44444444-4444-4444-8444-444444444444', name: 'Checking' },
+    userId: '22222222-2222-4222-8222-222222222222',
+    createdAt: new Date('2026-01-02T03:04:05.678Z'),
+    updatedAt: new Date('2026-01-02T03:04:05.678Z'),
+    ...overrides,
+  };
+}
+
+function makeCategoryRecord(overrides: Partial<CategoryRecord> = {}): CategoryRecord {
+  return {
+    id: '11111111-1111-4111-8111-111111111111',
+    name: 'Groceries',
+    type: CategoryType.EXPENSE,
+    icon: null,
     userId: '22222222-2222-4222-8222-222222222222',
     createdAt: new Date('2026-01-02T03:04:05.678Z'),
     updatedAt: new Date('2026-01-02T03:04:05.678Z'),
@@ -100,13 +125,21 @@ describe('ExpenseService', () => {
   let prisma: ReturnType<typeof createMockPrisma>;
   let expenseRepository: ReturnType<typeof createMockExpenseRepository>;
   let accountRepository: ReturnType<typeof createMockAccountRepository>;
+  let categoryRepository: ReturnType<typeof createMockCategoryRepository>;
   let service: ExpenseService;
 
   beforeEach(() => {
     prisma = createMockPrisma();
     expenseRepository = createMockExpenseRepository();
     accountRepository = createMockAccountRepository();
-    service = new ExpenseService(prisma as never, expenseRepository as never, accountRepository as never);
+    categoryRepository = createMockCategoryRepository();
+    categoryRepository.findById.mockResolvedValue(makeCategoryRecord());
+    service = new ExpenseService(
+      prisma as never,
+      expenseRepository as never,
+      accountRepository as never,
+      categoryRepository as never,
+    );
   });
 
   describe('getExpenseById', () => {
@@ -142,8 +175,25 @@ describe('ExpenseService', () => {
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
-    it('writes exactly the whitelisted fields and debits the account, in the same transaction', async () => {
+    it('throws NotFoundError when the category does not exist', async () => {
       accountRepository.findById.mockResolvedValue(makeAccountRecord());
+      categoryRepository.findById.mockResolvedValue(null);
+
+      await expect(service.createExpense(sampleInput, owner)).rejects.toThrow(NotFoundError);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it("throws ForbiddenError for another user's category", async () => {
+      accountRepository.findById.mockResolvedValue(makeAccountRecord());
+      categoryRepository.findById.mockResolvedValue(makeCategoryRecord({ userId: stranger.id }));
+
+      await expect(service.createExpense(sampleInput, owner)).rejects.toThrow(ForbiddenError);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('writes exactly the whitelisted fields and debits expense categories, in the same transaction', async () => {
+      accountRepository.findById.mockResolvedValue(makeAccountRecord());
+      categoryRepository.findById.mockResolvedValue(makeCategoryRecord({ type: CategoryType.EXPENSE }));
       expenseRepository.create.mockResolvedValue(makeExpenseRecord());
 
       await service.createExpense(sampleInput, owner);
@@ -165,6 +215,34 @@ describe('ExpenseService', () => {
         -sampleInput.amount,
         TX_MARKER,
       );
+    });
+
+    it('credits the account when the category is income', async () => {
+      accountRepository.findById.mockResolvedValue(makeAccountRecord());
+      categoryRepository.findById.mockResolvedValue(makeCategoryRecord({ type: CategoryType.INCOME }));
+      expenseRepository.create.mockResolvedValue(
+        makeExpenseRecord({ category: { id: sampleInput.categoryId, name: 'Salary', type: CategoryType.INCOME } }),
+      );
+
+      await service.createExpense(sampleInput, owner);
+
+      expect(accountRepository.adjustBalance).toHaveBeenCalledWith(
+        sampleInput.accountId,
+        sampleInput.amount,
+        TX_MARKER,
+      );
+    });
+
+    it('leaves the account balance unchanged when the category is transfer', async () => {
+      accountRepository.findById.mockResolvedValue(makeAccountRecord());
+      categoryRepository.findById.mockResolvedValue(makeCategoryRecord({ type: CategoryType.TRANSFER }));
+      expenseRepository.create.mockResolvedValue(
+        makeExpenseRecord({ category: { id: sampleInput.categoryId, name: 'Transfer', type: CategoryType.TRANSFER } }),
+      );
+
+      await service.createExpense(sampleInput, owner);
+
+      expect(accountRepository.adjustBalance).not.toHaveBeenCalled();
     });
   });
 
@@ -219,6 +297,39 @@ describe('ExpenseService', () => {
       expect(accountRepository.adjustBalance).toHaveBeenNthCalledWith(2, newAccountId, -123.45, TX_MARKER);
     });
 
+    it('reverses an expense debit and applies an income credit when category type changes', async () => {
+      const incomeCategoryId = '66666666-6666-4666-8666-666666666666';
+      expenseRepository.findById.mockResolvedValue(makeExpenseRecord());
+      expenseRepository.update.mockResolvedValue(
+        makeExpenseRecord({
+          categoryId: incomeCategoryId,
+          category: { id: incomeCategoryId, name: 'Salary', type: CategoryType.INCOME },
+        }),
+      );
+      categoryRepository.findById.mockResolvedValue(
+        makeCategoryRecord({ id: incomeCategoryId, name: 'Salary', type: CategoryType.INCOME }),
+      );
+
+      await service.updateExpense(
+        '11111111-1111-4111-8111-111111111111',
+        { categoryId: incomeCategoryId },
+        owner,
+      );
+
+      expect(accountRepository.adjustBalance).toHaveBeenNthCalledWith(
+        1,
+        '44444444-4444-4444-8444-444444444444',
+        123.45,
+        TX_MARKER,
+      );
+      expect(accountRepository.adjustBalance).toHaveBeenNthCalledWith(
+        2,
+        '44444444-4444-4444-8444-444444444444',
+        123.45,
+        TX_MARKER,
+      );
+    });
+
     it('throws NotFoundError when moved to an account that does not exist', async () => {
       expenseRepository.findById.mockResolvedValue(makeExpenseRecord());
       accountRepository.findById.mockResolvedValue(null);
@@ -247,13 +358,33 @@ describe('ExpenseService', () => {
       expect(expenseRepository.delete).not.toHaveBeenCalled();
     });
 
-    it('deletes and restores the account balance in the same transaction', async () => {
+    it('deletes an expense category and restores the account balance in the same transaction', async () => {
       expenseRepository.findById.mockResolvedValue(makeExpenseRecord());
       await service.deleteExpense('11111111-1111-4111-8111-111111111111', owner);
       expect(expenseRepository.delete).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111', TX_MARKER);
       expect(accountRepository.adjustBalance).toHaveBeenCalledWith(
         '44444444-4444-4444-8444-444444444444',
         123.45,
+        TX_MARKER,
+      );
+    });
+
+    it('deletes an income category and removes the account credit in the same transaction', async () => {
+      expenseRepository.findById.mockResolvedValue(
+        makeExpenseRecord({
+          category: {
+            id: '11111111-1111-4111-8111-111111111111',
+            name: 'Salary',
+            type: CategoryType.INCOME,
+          },
+        }),
+      );
+
+      await service.deleteExpense('11111111-1111-4111-8111-111111111111', owner);
+
+      expect(accountRepository.adjustBalance).toHaveBeenCalledWith(
+        '44444444-4444-4444-8444-444444444444',
+        -123.45,
         TX_MARKER,
       );
     });
